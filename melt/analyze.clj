@@ -1,5 +1,7 @@
 (ns melt.analyze
-  (:require [clojure.java.jdbc :as jdbc]))
+  (:require [clojure.data :as data]
+            [clojure.java.io :as io]
+            [clojure.java.jdbc :as jdbc]))
 
 (def mssql-host   (System/getenv "TEST_MSSQL_HOST"))
 (def mssql-port   (or (System/getenv "TEST_MSSQL_PORT") "1433"))
@@ -45,4 +47,52 @@
                                               :table_name) table))))
 
 (defn schema []
+  "List the tables from non-system schemas. Example result:
+  ({:table_schem ...
+    :table_name  ...
+    :table_cat   ...
+    :columns     (col1 col2 col3)} ...)"
   (map assoc-columns (tables)))
+
+(def cached-schema-file (io/as-file "schema.edn"))
+
+(defn cached-schema []
+  (if (.exists cached-schema-file)
+    (read-string (slurp cached-schema-file))))
+
+(defn save-schema [coll]
+  (spit cached-schema-file (pr-str coll)))
+
+(defn schema-diff []
+  (let [cached (cached-schema)
+        latest (schema)
+        diff   (data/diff cached latest)]
+    {:only-old   (first diff)
+     :only-new   (second diff)
+     :new-schema latest}))
+
+(defn schema-changed? [diff]
+  (some some? (vals (select-keys diff [:only-new :only-old]))))
+
+(defn schema-check []
+  (let [diff (schema-diff)]
+    (if (and (schema-changed? diff)
+             (= "TRUE" (System/getenv "ABORT_ON_SCHEMA_CHANGE")))
+      false
+      diff)))
+
+(defn sample-db [schema file-name]
+  (with-open [wr (io/writer file-name)]
+    (binding [*out* wr]
+      (doseq [table schema]
+        (let [name       (str "[" (:table_schem table) "].["
+                              (:table_name table) "]")
+              sample-sql (str "Select TOP 10 * From " name)
+              count-sql  (str "Select count(*) c From " name)]
+          (println "Sampling " name ", count: "
+                   (:c (first (jdbc/query db [count-sql]))))
+          (clojure.pprint/pprint (jdbc/query db [sample-sql]))
+          (println ""))))))
+
+(defn write-sample [file-name]
+  (sample-db (schema) file-name))
