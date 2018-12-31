@@ -1,7 +1,8 @@
 (ns melt.analyze
   (:require [clojure.data :as data]
             [clojure.java.io :as io]
-            [clojure.java.jdbc :as jdbc]))
+            [clojure.java.jdbc :as jdbc]
+            [clojure.pprint :refer [pprint]]))
 
 (def mssql-host   (System/getenv "TEST_MSSQL_HOST"))
 (def mssql-port   (or (System/getenv "TEST_MSSQL_PORT") "1433"))
@@ -91,7 +92,7 @@
               count-sql  (str "Select count(*) c From " name)]
           (println "Sampling " name ", count: "
                    (:c (first (jdbc/query db [count-sql]))))
-          (clojure.pprint/pprint (jdbc/query db [sample-sql]))
+          (pprint (jdbc/query db [sample-sql]))
           (println ""))))))
 
 (defn write-sample [file-name]
