@@ -22,38 +22,25 @@
          :user     jtds-user
          :password jtds-pass})
 
+(def ignorable-schemas #{"sys" "INFORMATION_SCHEMA"})
+
 (defn user-schema? [{:keys [table_schem]}]
-  (not (= table_schem "sys"))) ; TODO support more than just SQL Server
+  (not (contains? ignorable-schemas table_schem)))
 
-(defn tables []
-  (jdbc/with-db-metadata [md db]
-    (filter user-schema?
-            (jdbc/metadata-query
-             (.getTables md nil nil nil (into-array String ["TABLE"]))
-             {:row-fn (fn [m] (select-keys m [:table_schem
-                                              :table_name
-                                              :table_cat]))}))))
-
-(defn columns [catalogue schema table]
-  (jdbc/with-db-metadata [md db]
-    (->> (.getColumns md catalogue schema table nil)
-         (jdbc/metadata-query)
-         (map :column_name))))
-
-(map (juxt :table_cat :table_schem :table_name) (tables))
-
-(defn assoc-columns [table]
-  (assoc table :columns (apply columns ((juxt :table_cat
-                                              :table_schem
-                                              :table_name) table))))
+(defn group-by-table
+  [table-map {:keys [table_schem table_cat table_name column_name]}]
+  (update table-map
+          {:name   table_name
+           :cat    table_cat
+           :schema table_schem}
+          (fn [columns] (conj columns column_name))))
 
 (defn schema []
-  "List the tables from non-system schemas. Example result:
-  ({:table_schem ...
-    :table_name  ...
-    :table_cat   ...
-    :columns     (col1 col2 col3)} ...)"
-  (map assoc-columns (tables)))
+  (jdbc/with-db-metadata [md db]
+    (->> (.getColumns md nil nil "%" nil)
+         (jdbc/metadata-query)
+         (filter user-schema?)
+         (reduce group-by-table {}))))
 
 (def cached-schema-file (io/as-file "schema.edn"))
 
@@ -61,8 +48,11 @@
   (if (.exists cached-schema-file)
     (read-string (slurp cached-schema-file))))
 
-(defn save-schema [coll]
-  (spit cached-schema-file (pr-str coll)))
+(defn save-schema
+  ([] (save-schema (schema)))
+  ([coll] (spit cached-schema-file (pr-str coll))))
+
+(save-schema)
 
 (defn schema-diff []
   (let [cached (cached-schema)
