@@ -4,6 +4,7 @@
   "Create the directories if they don't exist. Returns whether the
    directory exists after this call."
   [path]
-  (if (not (.exists (java.io.File. path)))
-    (.mkdirs path)
-    true))
+  (let [file (java.io.File. path)]
+    (if (not (.exists file))
+      (.mkdirs file)
+      true)))
