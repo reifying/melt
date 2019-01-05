@@ -51,7 +51,7 @@
 
 (defn save-schema
   ([] (save-schema (schema)))
-  ([coll] (spit cached-schema-file (pr-str coll))))
+  ([coll] (spit (cached-schema-file) (pr-str coll))))
 
 (defn schema-diff []
   (let [cached (cached-schema)
