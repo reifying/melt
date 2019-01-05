@@ -3,7 +3,8 @@
             [clojure.java.io :as io]
             [clojure.java.jdbc :as jdbc]
             [clojure.pprint :refer [pprint]]
-            [melt.config :refer [db ignorable-schemas schema-file-path]]
+            [melt.config :refer [db ignorable-schemas schema-file-path
+                                 abort-on-schema-change]]
             [melt.util :refer [mkdirs]])
   (:import [java.io File]))
 
@@ -67,7 +68,7 @@
 (defn schema-check []
   (let [diff (schema-diff)]
     (if (and (schema-changed? diff)
-             (= "TRUE" (System/getenv "ABORT_ON_SCHEMA_CHANGE")))
+             (= "TRUE" abort-on-schema-change))
       false
       diff)))
 
