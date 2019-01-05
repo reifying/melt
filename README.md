@@ -1,5 +1,11 @@
 # melt
-Migrate DB tables to Kafka topics
+Migrate DB tables to Kafka topics (or melt the tables into streams). Support the common tasks to perform migrations:
+* planning and analysis
+* initial load
+* re-sync to catch up when differences exist
+* verification
+* monitoring
+
 
 *Complete:*
 
