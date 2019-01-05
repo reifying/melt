@@ -24,6 +24,11 @@ Migrate DB tables to Kafka topics (or melt the tables into streams). Support the
     clj -m melt.analyze
     ```
 
+4. Create topics for each table
+   ```
+   # List topic names
+   clj -i src/melt/analyze.clj  -e "(melt.analyze/topic-names)"
+   ```
 
 *Complete:*
 

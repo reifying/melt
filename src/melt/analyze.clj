@@ -4,7 +4,7 @@
             [clojure.java.jdbc :as jdbc]
             [clojure.pprint :refer [pprint]]
             [melt.config :refer [db ignorable-schemas schema-file-path
-                                 abort-on-schema-change]]
+                                 abort-on-schema-change table->topic-name]]
             [melt.util :refer [mkdirs]])
   (:import [java.io File]))
 
@@ -95,6 +95,12 @@
 (defn write-sample
   ([] (write-sample "target/data-samples"))
   ([dir-name] (sample-db (schema) dir-name)))
+
+(defn schema->topic-names [schema table-topic-fn]
+  (map table-topic-fn (keys schema)))
+
+(defn topic-names []
+  (schema->topic-names (cached-schema) table->topic-name))
 
 (defn -main []
   (write-sample))
