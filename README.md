@@ -6,6 +6,24 @@ Migrate DB tables to Kafka topics (or melt the tables into streams). Support the
 * verification
 * monitoring
 
+## How to use it
+1. Set required environment variables:
+   * TEST_MSSQL_HOST
+   * TEST_MSSQL_USER
+   * TEST_MSSQL_PASS
+   * TEST_MSSQL_NAME
+
+2. Save current schema to a file
+   (optional step for future comparison when schema changes)
+    ```
+    clj -i src/melt/analyze.clj  -e "(melt.analyze/save-schema)"
+    ```
+
+3. Take a row-count and sample of the data from all user tables
+    ```
+    clj -m melt.analyze
+    ```
+
 
 *Complete:*
 
