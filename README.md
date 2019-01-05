@@ -1,6 +1,7 @@
 # melt
 Migrate DB tables to Kafka topics
 
+*Complete:*
 
 ## Plan Transformations
 1. Read schema from db
@@ -9,7 +10,9 @@ Migrate DB tables to Kafka topics
 4. Proceed if different based on env var
 5. Read top 10 records from all tables
 6. pprint samples in files of corresponding names
-7. Decide how to transform them
+7. (Manually) decide how to transform them
+
+*Remaining:*
 
 ## Load topics
 1. Steps 1-4 from plan
