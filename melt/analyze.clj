@@ -27,20 +27,34 @@
 (defn user-schema? [{:keys [table_schem]}]
   (not (contains? ignorable-schemas table_schem)))
 
+(defn table [{:keys [table_schem table_cat table_name]}]
+  {:name   table_name
+   :cat    table_cat
+   :schema table_schem})
+
 (defn group-by-table
-  [table-map {:keys [table_schem table_cat table_name column_name]}]
+  [table-map column-map]
   (update table-map
-          {:name   table_name
-           :cat    table_cat
-           :schema table_schem}
-          (fn [columns] (conj columns column_name))))
+          (table column-map)
+          (fn [columns] (conj columns (:column_name column-map)))))
+
+(defn table-set []
+  (set (jdbc/with-db-metadata [md db]
+    (->> (.getTables md nil nil nil (into-array String ["TABLE"]))
+         (jdbc/metadata-query)
+         (filter user-schema?)
+         (map table)))))
+
+(defn contains-table? [table-set column-map]
+  (contains? table-set (table column-map)))
 
 (defn schema []
+  (let [table-set (table-set)]
   (jdbc/with-db-metadata [md db]
     (->> (.getColumns md nil nil "%" nil)
          (jdbc/metadata-query)
-         (filter user-schema?)
-         (reduce group-by-table {}))))
+         (filter (partial contains-table? table-set))
+         (reduce group-by-table {})))))
 
 (def cached-schema-file (io/as-file "schema.edn"))
 
@@ -70,18 +84,25 @@
       false
       diff)))
 
-(defn sample-db [schema file-name]
-  (with-open [wr (io/writer file-name)]
-    (binding [*out* wr]
-      (doseq [table schema]
-        (let [name       (str "[" (:table_schem table) "].["
-                              (:table_name table) "]")
-              sample-sql (str "Select TOP 10 * From " name)
-              count-sql  (str "Select count(*) c From " name)]
-          (println "Sampling " name ", count: "
-                   (:c (first (jdbc/query db [count-sql]))))
-          (pprint (jdbc/query db [sample-sql]))
-          (println ""))))))
+(defn sample-file-name [dir-name table]
+  (str dir-name
+       java.io.File/separator
+       (:schema table) "." (:name table) ".txt"))
 
-(defn write-sample [file-name]
-  (sample-db (schema) file-name))
+(defn sample-writer [dir-name table]
+  (io/writer (sample-file-name dir-name table)))
+
+(defn sample-db [schema dir-name]
+  (doseq [table (keys schema)]
+    (with-open [wr (sample-writer dir-name table)]
+      (let [name       (str "[" (:schema table) "].[" (:name table) "]")
+            sample-sql (str "Select TOP 10 * From " name)
+            count-sql  (str "Select count(*) c From " name)]
+        (println "Sampling " name)
+        (binding [*out* wr]
+          (println "Count: "
+                   (:c (first (jdbc/query db [count-sql]))))
+          (pprint (jdbc/query db [sample-sql])))))))
+
+(defn write-sample [dir-name]
+  (sample-db (schema) dir-name))
