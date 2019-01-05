@@ -93,6 +93,7 @@
   (io/writer (sample-file-name dir-name table)))
 
 (defn sample-db [schema dir-name]
+  (println "Writing sample to" dir-name)
   (doseq [table (keys schema)]
     (with-open [wr (sample-writer dir-name table)]
       (let [name       (str "[" (:schema table) "].[" (:name table) "]")
@@ -104,5 +105,11 @@
                    (:c (first (jdbc/query db [count-sql]))))
           (pprint (jdbc/query db [sample-sql])))))))
 
-(defn write-sample [dir-name]
-  (sample-db (schema) dir-name))
+(defn write-sample
+  ([] (let [dir-name "target/data-samples"
+            dir      (java.io.File. dir-name)]
+        (.mkdirs dir)
+        (write-sample dir-name)))
+  ([dir-name] (sample-db (schema) dir-name)))
+
+(write-sample)
