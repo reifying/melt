@@ -19,3 +19,5 @@
          :password jtds-pass})
 
 (def ignorable-schemas #{"sys" "INFORMATION_SCHEMA"})
+
+(def schema-file-path (or (System/getenv "SCHEMA_PATH") "target/schema.edn"))

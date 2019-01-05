@@ -3,7 +3,9 @@
             [clojure.java.io :as io]
             [clojure.java.jdbc :as jdbc]
             [clojure.pprint :refer [pprint]]
-            [melt.config :refer [db ignorable-schemas]]))
+            [melt.config :refer [db ignorable-schemas schema-file-path]]
+            [melt.util :refer [mkdirs]])
+  (:import [java.io File]))
 
 (defn user-schema? [{:keys [table_schem]}]
   (not (contains? ignorable-schemas table_schem)))
@@ -37,11 +39,15 @@
          (filter (partial contains-table? table-set))
          (reduce group-by-table {})))))
 
-(def cached-schema-file (io/as-file "schema.edn"))
+(defn cached-schema-file []
+  (let [f (io/as-file schema-file-path)]
+    (mkdirs (.getParent f))
+    f))
 
 (defn cached-schema []
-  (if (.exists cached-schema-file)
-    (read-string (slurp cached-schema-file))))
+  (let [f (cached-schema-file)]
+    (if (.exists f)
+      (read-string (slurp f)))))
 
 (defn save-schema
   ([] (save-schema (schema)))
@@ -66,15 +72,14 @@
       diff)))
 
 (defn sample-file-name [dir-name table]
-  (str dir-name
-       java.io.File/separator
-       (:schema table) "." (:name table) ".txt"))
+  (str dir-name File/separator (:schema table) "." (:name table) ".txt"))
 
 (defn sample-writer [dir-name table]
   (io/writer (sample-file-name dir-name table)))
 
 (defn sample-db [schema dir-name]
   (println "Writing sample to" dir-name)
+  (mkdirs dir-name)
   (doseq [table (keys schema)]
     (with-open [wr (sample-writer dir-name table)]
       (let [name       (str "[" (:schema table) "].[" (:name table) "]")
@@ -87,10 +92,8 @@
           (pprint (jdbc/query db [sample-sql])))))))
 
 (defn write-sample
-  ([] (let [dir-name "target/data-samples"
-            dir      (java.io.File. dir-name)]
-        (.mkdirs dir)
-        (write-sample dir-name)))
+  ([] (write-sample "target/data-samples"))
   ([dir-name] (sample-db (schema) dir-name)))
 
-(write-sample)
+(defn -main []
+  (write-sample))
