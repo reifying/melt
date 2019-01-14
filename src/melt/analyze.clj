@@ -18,27 +18,34 @@
 
 (defn group-by-table
   [table-map column-map]
-  (update table-map
-          (table column-map)
-          (fn [columns] (conj columns (:column_name column-map)))))
+  (update-in table-map
+             [(table column-map) :columns]
+             (fn [columns] (conj columns (:column_name column-map)))))
+
+(defn primary-keys [table]
+  (jdbc/with-db-metadata [md db]
+    (->> (.getPrimaryKeys md (:cat table) (:schema table) (:name table))
+         jdbc/metadata-query
+         (map :column_name))))
 
 (defn table-set []
   (set (jdbc/with-db-metadata [md db]
-    (->> (.getTables md nil nil nil (into-array String ["TABLE"]))
-         (jdbc/metadata-query)
-         (filter user-schema?)
-         (map table)))))
+         (->> (.getTables md nil nil nil (into-array String ["TABLE"]))
+              jdbc/metadata-query
+              (filter user-schema?)
+              (map table)))))
 
 (defn contains-table? [table-set column-map]
   (contains? table-set (table column-map)))
 
 (defn schema []
   (let [table-set (table-set)]
-  (jdbc/with-db-metadata [md db]
-    (->> (.getColumns md nil nil "%" nil)
-         (jdbc/metadata-query)
-         (filter (partial contains-table? table-set))
-         (reduce group-by-table {})))))
+    (jdbc/with-db-metadata [md db]
+      (->> (.getColumns md nil nil "%" nil)
+           jdbc/metadata-query
+           (filter (partial contains-table? table-set))
+           (reduce group-by-table {})
+           (reduce-kv #(assoc %1 %2 (assoc %3 :keys (primary-keys %2))) {})))))
 
 (defn cached-schema-file []
   (let [f (io/as-file schema-file-path)]
