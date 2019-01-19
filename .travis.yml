@@ -1,0 +1,20 @@
+language: clojure
+
+env:
+  - DOCKER_COMPOSE_VERSION=1.4.2
+  - TEST_MSSQL_USER=sa
+  - TEST_MSSQL_PASS=password-1234
+  - TEST_MSSQL_NAME=AdventureWorks
+
+services:
+  - docker
+
+script: 
+  - clj -Atest
+
+before_install:
+  - docker pull robyvandamme/mssql-server-linux-adventureworks
+  - docker run --rm -e 'ACCEPT_EULA=Y' -e 'MSSQL_SA_PASSWORD=password-1234' -p 1433:1433 -d robyvandamme/mssql-server-linux-adventureworks
+  - docker ps -a
+  - hostname
+  - export TEST_MSSQL_HOST=`hostname`
