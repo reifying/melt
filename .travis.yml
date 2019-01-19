@@ -9,6 +9,9 @@ env:
 services:
   - docker
 
+install: 
+  - clj -e '(println "Downloaded deps")'
+
 script: 
   - clj -Atest
 
