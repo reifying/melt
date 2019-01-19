@@ -21,5 +21,6 @@ before_install:
   - build/check_deps.sh
   - build/run_sql_server.sh
   - build/run_kafka.sh
+  - build/init_kafka.sh
   - docker ps -a
   
