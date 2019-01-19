@@ -1,5 +1,13 @@
 #!/bin/bash
 
+set +e
+# Check zookeeper until broker is seen (e.g., /brokers/ids/1001)
+for ((i=0; i<10; i++))
+  do 
+    echo dump | nc localhost 2181 | grep brokers && break
+    sleep 1
+done
+
 set -e
 for TOPIC in \
     "melt.SalesLT.CustomerAddress" \
