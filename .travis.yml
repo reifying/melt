@@ -18,6 +18,7 @@ before_install:
   - export TEST_MSSQL_PASS=password-1234
   - export TEST_MSSQL_NAME=AdventureWorks
   - build/install_clojure.sh
+  - build/check_deps.sh
   - build/run_sql_server.sh
   - build/run_kafka.sh
   - docker ps -a
