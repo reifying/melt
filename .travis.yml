@@ -12,8 +12,6 @@ install:
 script: 
   - clojure -Atest
 
-# TODO: Fail the build if newer clojure release available
-
 before_install:
   - export TEST_MSSQL_HOST=`hostname`
   - export TEST_MSSQL_USER=sa

@@ -1,6 +1,7 @@
 #!/bin/bash
 
 set -e
-curl -O https://download.clojure.org/install/linux-install-1.10.0.411.sh
-chmod +x linux-install-1.10.0.411.sh
-sudo ./linux-install-1.10.0.411.sh
+SCRIPT=`curl https://clojure.org/guides/getting_started | grep curl | sed 's|.*install/\(.*.sh\).*|\1|'`
+curl -O https://download.clojure.org/install/$SCRIPT
+chmod +x $SCRIPT
+sudo ./$SCRIPT
