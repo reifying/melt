@@ -106,10 +106,7 @@
   (apply merge table-entry))
 
 (defn select-all-sql [table-entry]
-  (let [sql (str "Select * From "
-                 (qualified-table-name (entry->table table-entry)))]
-    (println sql)
-    sql))
+  (str "Select * From " (qualified-table-name (entry->table table-entry))))
 
 (defn select-row-keys [table row]
   (select-keys row (:keys (second table))))
