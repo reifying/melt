@@ -26,7 +26,7 @@
   (jdbc/with-db-metadata [md db]
     (->> (.getPrimaryKeys md (:cat table) (:schema table) (:name table))
          jdbc/metadata-query
-         (map :column_name))))
+         (map (comp keyword clojure.string/lower-case :column_name)))))
 
 (defn table-set []
   (set (jdbc/with-db-metadata [md db]
@@ -85,12 +85,15 @@
 (defn sample-writer [dir-name table]
   (io/writer (sample-file-name dir-name table)))
 
+(defn qualified-table-name [{:keys [schema name]}]
+  (str "[" schema "].[" name "]"))
+
 (defn sample-db [schema dir-name]
   (println "Writing sample to" dir-name)
   (mkdirs dir-name)
   (doseq [table (keys schema)]
     (with-open [wr (sample-writer dir-name table)]
-      (let [name       (str "[" (:schema table) "].[" (:name table) "]")
+      (let [name       (qualified-table-name table)
             sample-sql (str "Select TOP 10 * From " name)
             count-sql  (str "Select count(*) c From " name)]
         (println "Sampling " name)
@@ -98,6 +101,22 @@
           (println "Count: "
                    (:c (first (jdbc/query db [count-sql]))))
           (pprint (jdbc/query db [sample-sql])))))))
+
+(defn entry->table [table-entry]
+  (apply merge table-entry))
+
+(defn select-all-sql [table-entry]
+  (let [sql (str "Select * From "
+                 (qualified-table-name (entry->table table-entry)))]
+    (println sql)
+    sql))
+
+(defn select-row-keys [table row]
+  (select-keys row (:keys (second table))))
+
+(defn read-table [table]
+  (letfn [(merge-by-key [m row] (assoc m (select-row-keys table row) row))]
+    (reduce merge-by-key {} (jdbc/query db [(select-all-sql table)]))))
 
 (defn write-sample
   ([] (write-sample "target/data-samples"))
