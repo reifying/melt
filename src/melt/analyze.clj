@@ -45,7 +45,9 @@
            jdbc/metadata-query
            (filter (partial contains-table? table-set))
            (reduce group-by-table {})
-           (reduce-kv #(assoc %1 %2 (assoc %3 :keys (primary-keys %2))) {})))))
+           (map #(apply merge %))
+           (map #(assoc % :keys (primary-keys %)))
+           (sort-by #(hash (select-keys % [:cat :name :schema])))))))
 
 (defn cached-schema-file []
   (let [f (io/as-file schema-file-path)]
@@ -91,7 +93,7 @@
 (defn sample-db [schema dir-name]
   (println "Writing sample to" dir-name)
   (mkdirs dir-name)
-  (doseq [table (keys schema)]
+  (doseq [table schema]
     (with-open [wr (sample-writer dir-name table)]
       (let [name       (qualified-table-name table)
             sample-sql (str "Select TOP 10 * From " name)
@@ -102,14 +104,11 @@
                    (:c (first (jdbc/query db [count-sql]))))
           (pprint (jdbc/query db [sample-sql])))))))
 
-(defn entry->table [table-entry]
-  (apply merge table-entry))
-
-(defn select-all-sql [table-entry]
-  (str "Select * From " (qualified-table-name (entry->table table-entry))))
+(defn select-all-sql [table]
+  (str "Select * From " (qualified-table-name table)))
 
 (defn select-row-keys [table row]
-  (select-keys row (:keys (second table))))
+  (select-keys row (:keys table)))
 
 (defn read-table [table]
   (letfn [(merge-by-key [m row] (assoc m (select-row-keys table row) row))]
@@ -120,7 +119,7 @@
   ([dir-name] (sample-db (schema) dir-name)))
 
 (defn schema->topic-names [schema table-topic-fn]
-  (map table-topic-fn (keys schema)))
+  (map table-topic-fn schema))
 
 (defn topic-names []
   (schema->topic-names (cached-schema) table->topic-name))
