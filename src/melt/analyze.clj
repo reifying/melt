@@ -107,11 +107,8 @@
 (defn select-all-sql [table]
   (str "Select * From " (qualified-table-name table)))
 
-(defn select-row-keys [table row]
-  (select-keys row (:keys table)))
-
 (defn read-table [table]
-  (letfn [(merge-by-key [m row] (assoc m (select-row-keys table row) row))]
+  (letfn [(merge-by-key [m row] (assoc m (select-keys row (:keys table)) row))]
     (reduce merge-by-key {} (jdbc/query db [(select-all-sql table)]))))
 
 (defn write-sample

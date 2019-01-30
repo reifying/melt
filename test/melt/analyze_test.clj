@@ -5,17 +5,39 @@
             [melt.analyze :as a]))
 
 (fact "`schema` reads a minimal amount of info describing the DB schema"
-      (get (a/schema) {:name   "CustomerAddress"
-                       :cat    "AdventureWorks"
-                       :schema "SalesLT"}) =>
-      {:columns ["ModifiedDate" "rowguid" "AddressType" "AddressID" "CustomerID"]
-       :keys    [:customerid :addressid]})
+      (first (a/schema)) =>
+      {:name    "SalesOrderHeader"
+       :cat     "AdventureWorks"
+       :schema  "SalesLT"
+       :columns ["ModifiedDate"
+                 "rowguid"
+                 "Comment"
+                 "TotalDue"
+                 "Freight"
+                 "TaxAmt"
+                 "SubTotal"
+                 "CreditCardApprovalCode"
+                 "ShipMethod"
+                 "BillToAddressID"
+                 "ShipToAddressID"
+                 "CustomerID"
+                 "AccountNumber"
+                 "PurchaseOrderNumber"
+                 "SalesOrderNumber"
+                 "OnlineOrderFlag"
+                 "Status"
+                 "ShipDate"
+                 "DueDate"
+                 "OrderDate"
+                 "RevisionNumber"
+                 "SalesOrderID"]
+       :keys    [:salesorderid]})
 
 (fact "`read-table` reads all the rows of a table and creates a map on primary keys"
-      (get (a/read-table [{:name   "CustomerAddress"
-                           :cat    "AdventureWorks"
-                           :schema "SalesLT"}
-                          {:keys [:customerid :addressid]}])
+      (get (a/read-table {:name   "CustomerAddress"
+                          :cat    "AdventureWorks"
+                          :schema "SalesLT"
+                          :keys   [:customerid :addressid]})
            {:customerid 29926
             :addressid  638})
       =>
