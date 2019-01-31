@@ -12,8 +12,7 @@ Migrate DB tables to Kafka topics (or melt the tables into streams). Support the
 Existing Kafka connectors for databases (JDBC or more specialized) require some
 specific traits about table design in order to reliably copy table updates to
 a topic. See section on "Timestamp and Incrementing Columns" in [JDBC Connector
-Documentation]
-(https://docs.confluent.io/5.1.0/connect/kafka-connect-jdbc/source-connector/index.html)
+Documentation](https://docs.confluent.io/5.1.0/connect/kafka-connect-jdbc/source-connector/index.html)
 on why having less than this configuration could result in missed updates.
 Although this is a strong approach, a legacy database will likely fall short of
 this requirement, and it can both be a costly investment and increase risk to
