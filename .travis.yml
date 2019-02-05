@@ -13,6 +13,7 @@ script:
   - build/run_tests.sh
 
 before_install:
+  - export TEST_KAFKA_HOST=`hostname`
   - export TEST_MSSQL_HOST=`hostname`
   - export TEST_MSSQL_USER=sa
   - export TEST_MSSQL_PASS=password-1234

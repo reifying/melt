@@ -3,7 +3,8 @@
             [melt.read-topic :as rt]
             [midje.sweet :refer [fact =>]]))
 
-(def bootstrap-servers "localhost:9092")
+(def bootstrap-servers
+  (str (or (System/getenv "TEST_KAFKA_HOST") "localhost") ":9092"))
 
 (def producer-props
   (doto (java.util.Properties.)
