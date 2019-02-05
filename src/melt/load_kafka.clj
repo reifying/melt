@@ -20,10 +20,13 @@
   (doseq [[k v] (a/read-table table)] (send-fn k v)))
 
 ;; TODO support transformations and custom SQL queries
-(defn load-topics-from-tables [producer-properties]
-  (with-open [producer (KafkaProducer. producer-properties)]
-    (doseq [table (a/schema)]
-      (let [topic  (table->topic-name table)
-            sender (sender-fn producer topic)]
-        (load-topic sender table)))
-    (.flush producer)))
+(defn load-topics-from-tables
+  ([producer-properties]
+   (with-open [producer (KafkaProducer. producer-properties)]
+     (load-topics-from-tables producer sender-fn)))
+  ([producer sender-fn]
+   (doseq [table (a/schema)]
+     (let [topic  (table->topic-name table)
+           sender (sender-fn producer topic)]
+       (load-topic sender table)))
+   (.flush producer)))
