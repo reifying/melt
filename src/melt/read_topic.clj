@@ -1,5 +1,5 @@
 (ns melt.read-topic
-  (:require [clojure.data.json :as json])
+  (:require [melt.serial :as serial])
   (:import [org.apache.kafka.clients.consumer Consumer KafkaConsumer ConsumerRecord]
            [org.apache.kafka.common TopicPartition]))
 
@@ -11,8 +11,8 @@
       (.seekToBeginning (.assignment c)))))
 
 (defn record [^ConsumerRecord cr]
-  {:value     (json/read-str (.value cr))
-   :key       (json/read-str (.key cr) :key-fn keyword)
+  {:value     (serial/read-str (.value cr))
+   :key       (serial/read-str (.key cr) :key-fn keyword)
    :offset    (.offset cr)
    :partition (.partition cr)
    :timestamp (.timestamp cr)})

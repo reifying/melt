@@ -1,32 +1,29 @@
 (ns melt.load-kafka
-  (:require [clojure.data.json :as json]
-            [melt.analyze :as a]
+  (:require [melt.analyze :as a]
             [melt.config :refer [table->topic-name]]
-            [melt.util :refer [has-time? format-date-time]])
+            [melt.serial :as serial])
   (:import [org.apache.kafka.clients.producer KafkaProducer ProducerRecord]))
 
-(defn ->json [x]
-  (letfn [(json-value-fn [k v]
-            (cond (instance? java.sql.Timestamp v) (format-date-time k v)
-                  (instance? java.sql.Blob v) (.getBytes v 1 (.length v))
-                  (instance? java.sql.Clob v) (.getSubString v 1 (.length v))
-                  :else v))]
-    (json/write-str x :value-fn json-value-fn)))
-
 (defn sender-fn [producer topic]
-  (fn [k v] (.send producer (ProducerRecord. topic (->json k) (->json v)))))
+  (fn [k v] (.send producer
+                   (ProducerRecord. topic
+                                    (serial/write-str k)
+                                    (serial/write-str v)))))
 
-(defn load-topic [send-fn table]
-  (doseq [[k v] (a/read-table table)] (send-fn k v)))
+(defn load-topic [send-fn record-seq]
+  (doseq [[k v] record-seq] (send-fn k v)))
+
+(defn read-schema []
+  (map (fn [table] [(table->topic-name table) (a/read-table table)])
+       (a/schema)))
 
 ;; TODO support transformations and custom SQL queries
-(defn load-topics-from-tables
-  ([producer-properties]
-   (with-open [producer (KafkaProducer. producer-properties)]
-     (load-topics-from-tables producer sender-fn)))
-  ([producer sender-fn]
-   (doseq [table (a/schema)]
-     (let [topic  (table->topic-name table)
-           sender (sender-fn producer topic)]
-       (load-topic sender table)))
-   (.flush producer)))
+(defn load-topics
+  [{:keys [producer producer-properties sender-fn records-fn]
+    :or   {sender-fn  sender-fn
+           records-fn read-schema}}]
+  {:pre [(some some? [producer producer-properties])]}
+  (with-open [p (or producer (KafkaProducer. producer-properties))]
+    (doseq [[topic record-seq] (records-fn)]
+      (load-topic (sender-fn p topic) record-seq))
+    (.flush p)))

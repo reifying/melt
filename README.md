@@ -69,8 +69,6 @@ frequently (i.e. daily) to avoid long topic load times.
 6. pprint samples in files of corresponding names
 7. (Manually) decide how to transform them
 
-*Remaining:*
-
 ## Load topics
 1. Steps 1-4 from plan
 2. Fully read topics
@@ -81,6 +79,8 @@ frequently (i.e. daily) to avoid long topic load times.
 
 ## Verify
 Steps 1-5 from Load
+
+*Remaining:*
 
 ## Monitor
 Verify, allowing for some latency

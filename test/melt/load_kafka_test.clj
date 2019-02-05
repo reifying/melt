@@ -3,14 +3,13 @@
             [midje.sweet :refer [fact =>]])
   (:import [org.apache.kafka.clients.producer MockProducer]))
 
-(fact "`load-topics-from-tables` reads tables and sends records to Kafka"
+(fact "`load-topics` reads tables and sends records to Kafka"
       (let [topic-counts (atom (sorted-map))]
-        (lk/load-topics-from-tables
-         (MockProducer.)
-         (fn [_ topic]
-           (fn [k v]
-             (swap! topic-counts
-                    (fn [tc] (update tc topic #(inc (or % 0))))))))
+        (lk/load-topics {:producer  (MockProducer.)
+                         :sender-fn (fn [_ topic]
+                                      (fn [k v]
+                                        (swap! topic-counts
+                                               (fn [tc] (update tc topic #(inc (or % 0)))))))})
         @topic-counts
         =>
         {"melt.SalesLT.Address"                        450
