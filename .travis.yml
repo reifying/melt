@@ -10,7 +10,7 @@ install:
   - clojure -e '(println "Downloaded deps")'
 
 script: 
-  - clojure -Atest
+  - build/run_tests.sh
 
 before_install:
   - export TEST_MSSQL_HOST=`hostname`
