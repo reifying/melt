@@ -38,9 +38,7 @@
 
 (defn not-fully-consumed-fn [^Consumer c consumed-offsets-atom]
   (let [end-offsets (.endOffsets c (.assignment c))]
-    (fn [_]
-      (println "consumed=" @consumed-offsets-atom " end=" end-offsets) ; TODO
-      (not (fully-consumed? c @consumed-offsets-atom end-offsets)))))
+    (fn [_] (not (fully-consumed? c @consumed-offsets-atom end-offsets)))))
 
 (defn consumer-seq
   ([^Consumer c] (consumer-seq c (atom {})))
