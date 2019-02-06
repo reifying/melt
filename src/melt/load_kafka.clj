@@ -17,7 +17,6 @@
   (map (fn [table] [(table->topic-name table) (a/read-table table)])
        (a/schema)))
 
-;; TODO support transformations and custom SQL queries
 (defn load-topics
   [{:keys [producer producer-properties sender-fn records-fn]
     :or   {sender-fn  sender-fn
