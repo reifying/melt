@@ -36,10 +36,10 @@ frequently (i.e. daily) to avoid long topic load times.
 
 ## How to use it
 1. Set required environment variables:
-   * TEST_MSSQL_HOST
-   * TEST_MSSQL_USER
-   * TEST_MSSQL_PASS
-   * TEST_MSSQL_NAME
+   * MELT_DB_HOST
+   * MELT_DB_USER
+   * MELT_DB_PASS
+   * MELT_DB_NAME
 
 2. Save current schema to a file
    (optional step for future comparison when schema changes)
