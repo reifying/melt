@@ -1,28 +1,27 @@
 (ns melt.load-kafka
-  (:require [melt.analyze :as a]
-            [melt.config :refer [table->topic-name]]
+  (:require [melt.channel :as ch]
+            [melt.jdbc :as mdb]
             [melt.serial :as serial])
   (:import [org.apache.kafka.clients.producer KafkaProducer ProducerRecord]))
 
-(defn sender-fn [producer topic]
-  (fn [k v] (.send producer
-                   (ProducerRecord. topic
-                                    (serial/write-str k)
-                                    (serial/write-str v)))))
-
-(defn load-topic [send-fn record-seq]
-  (doseq [[k v] record-seq] (send-fn k v)))
-
-(defn read-schema []
-  (map (fn [table] [(table->topic-name table) (a/read-table table)])
-       (a/schema)))
-
-(defn load-topics
-  [{:keys [producer producer-properties sender-fn records-fn]
-    :or   {sender-fn  sender-fn
-           records-fn read-schema}}]
+(defn with-producer [callback {:keys [producer producer-properties]}]
   {:pre [(some some? [producer producer-properties])]}
   (with-open [p (or producer (KafkaProducer. producer-properties))]
-    (doseq [[topic record-seq] (records-fn)]
-      (load-topic (sender-fn p topic) record-seq))
+    (callback p)
     (.flush p)))
+
+(defn default-send-fn [producer]
+  (fn [topic k v] (.send producer (ProducerRecord. topic k v))))
+
+(defn load-with-sender [channels send-fn]
+  (doseq [#::ch{:keys [channel records]} (mdb/channel-content channels)]
+    (let [topic-fn (::ch/topic-fn channel)]
+      (doseq [[k v] records]
+        (send-fn (topic-fn channel v)
+                 (serial/write-str k)
+                 (serial/write-str v))))))
+
+(defn load-with-producer [channels producer-options]
+  (with-producer
+    (fn [p] (load-with-sender channels (default-send-fn p)))
+    producer-options))

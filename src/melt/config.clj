@@ -25,5 +25,5 @@
 ; Set to TRUE to enable
 (def abort-on-schema-change (System/getenv "ABORT_ON_SCHEMA_CHANGE"))
 
-(defn table->topic-name [{:keys [schema name]}]
+(defn table->topic-name [#:melt.channel{:keys [schema name]} _]
   (str "melt." schema "." name))

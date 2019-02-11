@@ -1,6 +1,7 @@
 (ns melt.util
   (:require [clj-time.coerce :as c]
-            [clj-time.format :as f])
+            [clj-time.format :as f]
+            [clojure.spec.alpha :as s])
   (:import [java.util Date Calendar]
            [org.joda.time DateTimeZone]))
 
@@ -30,3 +31,9 @@
            (not (has-time? v)))
     (format-date v)
     (format-time v)))
+
+(defn conform-or-throw [spec x]
+  (let [parsed (s/conform spec x)]
+    (if (= parsed ::s/invalid)
+      (throw (ex-info "Invalid" (s/explain-data spec x)))
+      parsed)))

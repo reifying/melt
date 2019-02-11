@@ -3,10 +3,10 @@
   (:import [org.apache.kafka.clients.consumer Consumer KafkaConsumer ConsumerRecord]
            [org.apache.kafka.common TopicPartition]))
 
-(defn consumer-at-beginning [consumer-props topic]
+(defn consumer-at-beginning [consumer-props topics]
   (let [c (KafkaConsumer. consumer-props)]
     (doto c
-      (.subscribe [topic])
+      (.subscribe topics)
       (.poll 1)
       (.seekToBeginning (.assignment c)))))
 
@@ -15,7 +15,8 @@
    :key       (serial/read-str (.key cr) :key-fn keyword)
    :offset    (.offset cr)
    :partition (.partition cr)
-   :timestamp (.timestamp cr)})
+   :timestamp (.timestamp cr)
+   :topic     (.topic cr)})
 
 (defn at-end? [consumed-offsets [^TopicPartition p end-offset]]
   (if-let [committed-offset (get consumed-offsets (.partition p))]
@@ -51,16 +52,16 @@
                           (repeatedly #(poll track-offset-fn c))))))))
 
 (defn count-topic [consumer-props topic]
-  (with-open [c (consumer-at-beginning consumer-props topic)]
+  (with-open [c (consumer-at-beginning consumer-props [topic])]
     (count (consumer-seq c))))
 
-(defn reduce-topic [consumer-seq topic-map]
-  (reduce (fn [m {:keys [key value]}] (assoc m key value))
+(defn- reduce-topics [consumer-seq topic-map]
+  (reduce (fn [m {:keys [topic key value]}] (assoc-in m [topic key] value))
           topic-map
           consumer-seq))
 
-(defn read-topic [consumer-props topic]
-  (with-open [c (consumer-at-beginning consumer-props topic)]
+(defn read-topics [consumer-props topics]
+  (with-open [c (consumer-at-beginning consumer-props topics)]
     (let [consumed (atom {})
-          reduced  (reduce-topic (consumer-seq c consumed) {})]
-      (reduce-topic (consumer-seq c consumed) reduced))))
+          reduced  (reduce-topics (consumer-seq c consumed) {})]
+      (reduce-topics (consumer-seq c consumed) reduced))))
