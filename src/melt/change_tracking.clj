@@ -11,7 +11,7 @@
                ["Select ct.*"
                 "From CHANGETABLE(CHANGES "
                 (qualified-table-name table)
-                ", ?) As ct"]))
+                ", ?) As ct Order By ct.sys_change_version"]))
 
 (defn changes [table change-version]
   (jdbc/query db [(change-sql table) change-version]))
