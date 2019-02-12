@@ -13,7 +13,7 @@
 ;; will likely cause successors to fail.
 
 (def bootstrap-servers
-  (str (or (System/getenv "TEST_KAFKA_HOST") "localhost") ":9092"))
+  (str (or (System/getenv "MELT_KAFKA_HOST") "localhost") ":9092"))
 
 (def producer-props
   (doto (java.util.Properties.)
