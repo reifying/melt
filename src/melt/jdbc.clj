@@ -57,10 +57,12 @@
     (mkdirs (.getParent f))
     f))
 
-(defn cached-schema []
+(defn file-schema []
   (let [f (cached-schema-file)]
     (if (.exists f)
       (read-string (slurp f)))))
+
+(def cached-schema (memoize schema))
 
 (defn save-schema
   ([] (save-schema (schema)))
