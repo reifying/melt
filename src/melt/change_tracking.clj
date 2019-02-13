@@ -3,10 +3,10 @@
             [melt.channel :as ch]
             [melt.config :refer [db]]))
 
-(defn- qualified-table-name [table]
+(defn qualified-table-name [table]
   (str (::ch/schema table) "." (::ch/name table)))
 
-(defn- change-sql [table]
+(defn change-sql [table]
   (String/join " "
                ["Select ct.*"
                 "From CHANGETABLE(CHANGES "
