@@ -64,3 +64,10 @@
 
 (defn changes [table change-version]
   (jdbc/query db [(change-sql table) change-version]))
+
+(defn min-change-version [table]
+  (-> (jdbc/query db ["Select change_tracking_min_valid_version(OBJECT_ID(?)) min_ver"
+                      (qualified-table-name table)])
+      first
+      :min_ver))
+
