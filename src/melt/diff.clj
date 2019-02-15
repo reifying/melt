@@ -16,10 +16,15 @@
                       (reduce-kv (fn [m k v] (assoc m [topic k] v)) {} records)))
              {} topic-map))
 
+(defn- topics [channel-map]
+  (distinct (map first (keys channel-map))))
+
+(defn- topic-map [consumer-props topics]
+  (merge-topic-key (rt/read-topics consumer-props topics)))
+
 (defn diff [consumer-props channel]
   (let [channel-map (by-topic-key channel)
-        topics      (distinct (map first (keys channel-map)))
-        topic-map   (merge-topic-key (rt/read-topics consumer-props topics))
+        topic-map   (topic-map consumer-props (topics channel-map))
         diff        (serial/lossy-diff channel-map topic-map)]
     {:table-only (select-keys channel-map (map key (first diff)))
      :topic-only (select-keys topic-map (map key (second diff)))}))

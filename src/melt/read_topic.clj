@@ -60,8 +60,20 @@
           topic-map
           consumer-seq))
 
-(defn read-topics [consumer-props topics]
+(defn read-topics-loop [consumer-props topics end-fn retries]
   (with-open [c (consumer-at-beginning consumer-props topics)]
-    (let [consumed (atom {})
-          reduced  (reduce-topics (consumer-seq c consumed) {})]
-      (reduce-topics (consumer-seq c consumed) reduced))))
+    (loop [c        c
+           end-fn   end-fn
+           consumed (atom {})
+           reduced  {}
+           retries  retries]
+      (let [reduced (reduce-topics (consumer-seq c consumed) reduced)]
+        (if (or (<= retries 0) (end-fn reduced))
+          reduced
+          (recur c end-fn consumed reduced (dec retries)))))))
+
+(defn read-topics
+  "Read topics twice since reading a large topic could take minutes by which
+   time the original end-offsets may no longer be the true end-offsets"
+  [consumer-props topics]
+  (read-topics-loop consumer-props topics (fn [_] false) 1))
