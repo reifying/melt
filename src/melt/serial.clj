@@ -18,7 +18,5 @@
 
 (def lossy-identity (comp read-str write-str))
 
-(defn lossy-diff [table-map topic-map]
-  (clojure.data/diff
-   (reduce-kv (fn [m k v] (assoc m k (lossy-identity v))) {} table-map)
-   topic-map))
+(defn fuzz [table-map]
+  (reduce-kv (fn [m k v] (assoc m k (lossy-identity v))) {} table-map))

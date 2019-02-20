@@ -58,8 +58,6 @@ frequently (i.e. daily) to avoid long topic load times.
    clj -i src/melt/analyze.clj  -e "(melt.analyze/topic-names)"
    ```
 
-*Complete:*
-
 ## Plan Transformations
 1. Read schema from db
 2. Compare schema to local cache
@@ -80,8 +78,6 @@ frequently (i.e. daily) to avoid long topic load times.
 ## Verify
 Steps 1-5 from Load
 
-*Remaining:*
-
 ## Monitor
 Verify, allowing for some latency
 
@@ -91,5 +87,3 @@ Verify, allowing for some latency
 2. Read table for record that changed
 3. Transform
 4. Send to topic
-
-

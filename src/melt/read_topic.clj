@@ -1,14 +1,19 @@
 (ns melt.read-topic
   (:require [melt.serial :as serial])
   (:import [org.apache.kafka.clients.consumer Consumer KafkaConsumer ConsumerRecord]
-           [org.apache.kafka.common TopicPartition]))
+           [org.apache.kafka.common TopicPartition])
+  (:refer-clojure :exclude [poll]))
+
+(def empty-data {:offsets {}})
+
+(defn reset-consumer [consumer topics]
+  (doto consumer
+    (.subscribe topics)
+    (.poll 1)
+    (.seekToBeginning (.assignment consumer))))
 
 (defn consumer-at-beginning [consumer-props topics]
-  (let [c (KafkaConsumer. consumer-props)]
-    (doto c
-      (.subscribe topics)
-      (.poll 1)
-      (.seekToBeginning (.assignment c)))))
+  (reset-consumer (KafkaConsumer. consumer-props) topics))
 
 (defn record [^ConsumerRecord cr]
   {:value     (serial/read-str (.value cr))
@@ -23,57 +28,63 @@
     (<= end-offset (inc committed-offset))
     false))
 
-(defn fully-consumed? [^Consumer c consumed-offsets end-offsets]
+(defn fully-consumed? [consumed-offsets end-offsets]
   (every? (partial at-end? consumed-offsets) end-offsets))
 
-(defn track-offset [consumed-offsets-atom
-                    {:keys [partition offset]
-                     :as   r}]
-  (swap! consumed-offsets-atom
-         (fn [m] (assoc m partition (max offset (or (m partition) 0)))))
-  r)
+(defn end-offsets [^Consumer c]
+  (.endOffsets c (.assignment c)))
 
-(defn poll [track-offset-fn c]
-  (let [crs (.poll c 1000)]
-    (if (.isEmpty crs) nil (map (comp track-offset-fn record) crs))))
+(defn assoc-offset [offsets message]
+  (assoc offsets (:partition message) (:offset message)))
 
-(defn not-fully-consumed-fn [^Consumer c consumed-offsets-atom]
-  (let [end-offsets (.endOffsets c (.assignment c))]
-    (fn [_] (not (fully-consumed? c @consumed-offsets-atom end-offsets)))))
+(defn- poll [c]
+  (.poll c 1000))
+
+(defn- seq-entry [record offsets]
+  {:consumer-record record
+   :offsets         offsets})
 
 (defn consumer-seq
-  ([^Consumer c] (consumer-seq c (atom {})))
-  ([^Consumer c consumed-offsets-atom]
-   (let [track-offset-fn (partial track-offset consumed-offsets-atom)
-         take-while-fn   (not-fully-consumed-fn c consumed-offsets-atom)]
-     (filter some?
-             (flatten
-              (take-while take-while-fn
-                          (repeatedly #(poll track-offset-fn c))))))))
+  ([^Consumer c]
+   (consumer-seq c {}))
+  ([^Consumer c current-offsets]
+   (consumer-seq c current-offsets (end-offsets c)))
+  ([^Consumer c current-offsets end-offsets]
+   (consumer-seq c current-offsets end-offsets (poll c)))
+  ([^Consumer c current-offsets end-offsets messages]
+   (lazy-seq
+    (if (seq messages)
+      (let [record      (record (first messages))
+            cur-offsets (assoc-offset current-offsets record)]
+        (cons (seq-entry record cur-offsets)
+              (consumer-seq c cur-offsets end-offsets (rest messages))))
+      (if-not (fully-consumed? current-offsets end-offsets)
+        (consumer-seq c current-offsets end-offsets (poll c)))))))
 
 (defn count-topic [consumer-props topic]
   (with-open [c (consumer-at-beginning consumer-props [topic])]
     (count (consumer-seq c))))
 
-(defn- reduce-topics [consumer-seq topic-map]
-  (reduce (fn [m {:keys [topic key value]}] (assoc-in m [topic key] value))
-          topic-map
-          consumer-seq))
+(defn- merge-seq-entry [topic-data seq-entry]
+  (let [{:keys [topic key value]} (:consumer-record seq-entry)]
+    (-> topic-data
+        (assoc-in [:data topic key] value)
+        (assoc :offsets (:offsets seq-entry)))))
 
-(defn read-topics-loop [consumer-props topics end-fn retries]
+(defn reduce-consumer-seq [c topic-data]
+  (reduce merge-seq-entry topic-data (consumer-seq c (:offsets topic-data))))
+
+(defn read-topics-loop [consumer-props topics retries]
   (with-open [c (consumer-at-beginning consumer-props topics)]
-    (loop [c        c
-           end-fn   end-fn
-           consumed (atom {})
-           reduced  {}
-           retries  retries]
-      (let [reduced (reduce-topics (consumer-seq c consumed) reduced)]
-        (if (or (<= retries 0) (end-fn reduced))
-          reduced
-          (recur c end-fn consumed reduced (dec retries)))))))
+    (loop [topic-data empty-data
+           retries    retries]
+      (if (<= retries 0)
+        topic-data
+        (recur (reduce-consumer-seq c topic-data)
+               (dec retries))))))
 
 (defn read-topics
   "Read topics twice since reading a large topic could take minutes by which
    time the original end-offsets may no longer be the true end-offsets"
   [consumer-props topics]
-  (read-topics-loop consumer-props topics (fn [_] false) 1))
+  (:data (read-topics-loop consumer-props topics 1)))

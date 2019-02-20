@@ -1,3 +1,3 @@
 #!/bin/bash
 
-clj -Aintegration
+clj -J-XX:-OmitStackTraceInFastThrow -Aintegration
