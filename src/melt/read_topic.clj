@@ -29,6 +29,7 @@
     false))
 
 (defn fully-consumed? [consumed-offsets end-offsets]
+  (println "consumed? consumed:" consumed-offsets "end:" end-offsets)
   (every? (partial at-end? consumed-offsets) end-offsets))
 
 (defn end-offsets [^Consumer c]
@@ -38,7 +39,8 @@
   (assoc offsets (:partition message) (:offset message)))
 
 (defn- poll [c]
-  (.poll c 1000))
+  (println "Polling")
+  (map record (.poll c 1000)))
 
 (defn- seq-entry [record offsets]
   {:consumer-record record
@@ -54,7 +56,7 @@
   ([^Consumer c current-offsets end-offsets messages]
    (lazy-seq
     (if (seq messages)
-      (let [record      (record (first messages))
+      (let [record      (first messages)
             cur-offsets (assoc-offset current-offsets record)]
         (cons (seq-entry record cur-offsets)
               (consumer-seq c cur-offsets end-offsets (rest messages))))
