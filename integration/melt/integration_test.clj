@@ -30,6 +30,10 @@
     (.put "value.deserializer" "org.apache.kafka.common.serialization.StringDeserializer")
     (.put "group.id" "melt.integration-test")))
 
+(def sync-consumer-props
+  (doto consumer-props
+    (.put "group.id" "melt.integration-test.sync")))
+
 (if (= "TRUE" (System/getenv "RESET_INTEGRATION"))
   (jdbc/update! db "saleslt.address" {:postalcode "98626"} ["addressid = ?" 888]))
 
@@ -82,5 +86,5 @@
       (.start
        (Thread.
         (fn [] (do (Thread/sleep 5000)
-                   (s/sync consumer-props producer-props table)))))
+                   (s/sync sync-consumer-props producer-props table)))))
       (v/verify consumer-props table 20 1) => true)
