@@ -6,11 +6,22 @@
 
 (def empty-data {:offsets {}})
 
+(defn- partition-infos [c topics]
+  (let [topics (set topics)]
+    (filter #(topics (first %)) (into {} (.listTopics c)))))
+
+(defn- topic-partition [partition-info]
+  (TopicPartition. (.topic partition-info) (.partition partition-info)))
+
+(defn- topic-partitions [c topics]
+  (map topic-partition (flatten (map seq (vals (partition-infos c topics))))))
+
 (defn reset-consumer [consumer topics]
-  (doto consumer
-    (.subscribe topics)
-    (.poll 1)
-    (.seekToBeginning (.assignment consumer))))
+  (let [tps (topic-partitions consumer topics)]
+    (.assign consumer tps)
+    (doseq [[partition offset] (.beginningOffsets consumer tps)]
+      (.seek consumer partition offset)))
+  consumer)
 
 (defn consumer-at-beginning [consumer-props topics]
   (reset-consumer (KafkaConsumer. consumer-props) topics))
