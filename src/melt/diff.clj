@@ -1,5 +1,6 @@
 (ns melt.diff
-  (:require [melt.channel :as ch]
+  (:require [clojure.data :as data]
+            [melt.channel :as ch]
             [melt.read-topic :as rt]
             [melt.serial :as serial]))
 
@@ -25,6 +26,6 @@
 (defn diff [consumer-props channel]
   (let [channel-map (by-topic-key channel)
         topic-map   (topic-map consumer-props (topics channel-map))
-        diff        (clojure.data/diff (serial/fuzz channel-map) topic-map)]
+        diff        (data/diff (serial/fuzz channel-map) topic-map)]
     {:table-only (select-keys channel-map (map key (first diff)))
      :topic-only (select-keys topic-map (map key (second diff)))}))
