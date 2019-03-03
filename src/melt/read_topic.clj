@@ -35,9 +35,10 @@
    :topic     (.topic cr)})
 
 (defn at-end? [consumed-offsets [^TopicPartition p end-offset]]
-  (if-let [committed-offset (get consumed-offsets (.partition p))]
+  (or (zero? end-offset)
+      (if-let [committed-offset (get-in consumed-offsets [(.topic p) (.partition p)])]
     (<= end-offset (inc committed-offset))
-    false))
+        false)))
 
 (defn end-offsets [^Consumer c]
   (.endOffsets c (.assignment c)))
@@ -48,7 +49,7 @@
       (every? (partial at-end? consumed-offsets) end-offsets))))
 
 (defn assoc-offset [offsets message]
-  (assoc offsets (:partition message) (:offset message)))
+  (assoc-in offsets [(:topic message) (:partition message)] (:offset message)))
 
 (defn- poll [c]
   (map record (.poll c 1000)))
@@ -78,7 +79,7 @@
   (let [{:keys [topic key value]} (:consumer-record seq-entry)]
     (-> topic-data
         (assoc-in [:data topic key] value)
-        (assoc :offsets (:offsets seq-entry)))))
+        (update :offsets merge (:offsets seq-entry)))))
 
 (defn reduce-consumer-seq [c topic-data]
   (reduce merge-seq-entry topic-data (consumer-seq c (:offsets topic-data))))
