@@ -47,15 +47,15 @@
       (let [topic-content (rt/read-topics consumer-props ["melt.SalesLT.Address"])]
         (get-in topic-content ["melt.SalesLT.Address" {:addressid 603}])
         =>
-        {"city"          "Killeen"
-         "addressline2"  nil
-         "modifieddate"  "2007-08-01"
-         "rowguid"       "0E6E9E86-A637-4FD5-A945-AC342BFD715B"
-         "postalcode"    "76541"
-         "addressline1"  "9500b E. Central Texas Expressway"
-         "countryregion" "United States"
-         "stateprovince" "Texas"
-         "addressid"     603}))
+        {:addressid     603
+         :addressline1  "9500b E. Central Texas Expressway"
+         :addressline2  nil
+         :city          "Killeen"
+         :countryregion "United States"
+         :modifieddate  "2007-08-01"
+         :postalcode    "76541"
+         :rowguid       "0E6E9E86-A637-4FD5-A945-AC342BFD715B"
+         :stateprovince "Texas"}))
 
 (fact "`diff` finds no differences between a source table and target topic after initial load"
       (d/diff consumer-props table)
@@ -68,7 +68,7 @@
 
       (let [diff (d/diff consumer-props table)]
         (get-in diff [:table-only ["melt.SalesLT.Address" {:addressid 888}]]) => (contains {:postalcode "99995"})
-        (get-in diff [:topic-only ["melt.SalesLT.Address" {:addressid 888}]]) => (contains {"postalcode" "98626"})))
+        (get-in diff [:topic-only ["melt.SalesLT.Address" {:addressid 888}]]) => (contains {:postalcode "98626"})))
 
 (fact "`sync` publishes differences in a table to the topic to bring them back in sync"
       (s/sync consumer-props producer-props table)

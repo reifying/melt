@@ -26,9 +26,25 @@
 (defn consumer-at-beginning [consumer-props topics]
   (reset-consumer (KafkaConsumer. consumer-props) topics))
 
+(defn next-offset [offsets topic partition]
+  (if-let [current (get-in offsets [topic partition])]
+    (inc current)))
+
+(defn consumer-at-offsets [consumer topics offsets]
+  (let [tps (topic-partitions consumer topics)]
+    (.assign consumer tps)
+    (doseq [[tp begin-offset] (.beginningOffsets consumer tps)]
+      (.seek consumer tp
+             (or (next-offset offsets (.topic tp) (.partition tp))
+                 begin-offset))))
+  consumer)
+
+(defn resuming-consumer [consumer-props topics offsets]
+  (consumer-at-offsets (KafkaConsumer. consumer-props) topics offsets))
+
 (defn record [^ConsumerRecord cr]
   {:value     (serial/read-str (.value cr))
-   :key       (serial/read-str (.key cr) :key-fn keyword)
+   :key       (serial/read-str (.key cr))
    :offset    (.offset cr)
    :partition (.partition cr)
    :timestamp (.timestamp cr)
@@ -37,7 +53,7 @@
 (defn at-end? [consumed-offsets [^TopicPartition p end-offset]]
   (or (zero? end-offset)
       (if-let [committed-offset (get-in consumed-offsets [(.topic p) (.partition p)])]
-    (<= end-offset (inc committed-offset))
+        (<= end-offset (inc committed-offset))
         false)))
 
 (defn end-offsets [^Consumer c]
@@ -84,18 +100,18 @@
 (defn reduce-consumer-seq [c topic-data]
   (reduce merge-seq-entry topic-data (consumer-seq c (:offsets topic-data))))
 
-(defn- background-consume-fn [consumer-props topics reduced-atom shutdown-atom]
+(defn- background-consume-fn [consumer-props topics topic-data shutdown-atom]
   (fn []
-    (with-open [c (consumer-at-beginning consumer-props topics)]
+    (with-open [c (resuming-consumer consumer-props topics (:offsets @topic-data))]
       (doseq [entry (consumer-seq c {} (fn [_] @shutdown-atom) [])]
-        (swap! reduced-atom (fn [topic-data]
-                              (merge-seq-entry topic-data entry)))))))
+        (swap! topic-data (fn [topic-data]
+                            (merge-seq-entry topic-data entry)))))))
 
-(defn background-consume [consumer-props topics reduced-atom]
+(defn background-consume [consumer-props topics topic-data]
   (let [shutdown (atom false)]
     (.start
      (Thread.
-      (background-consume-fn consumer-props topics reduced-atom shutdown)))
+      (background-consume-fn consumer-props topics topic-data shutdown)))
     (reify java.lang.AutoCloseable
       (close [this] (reset! shutdown true)))))
 

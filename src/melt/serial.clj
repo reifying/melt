@@ -14,7 +14,8 @@
                   :else v))]
     (json/write-str x :value-fn json-value-fn)))
 
-(def read-str json/read-str)
+(defn read-str [s]
+  (json/read-str s :key-fn keyword))
 
 (def lossy-identity (comp read-str write-str))
 
