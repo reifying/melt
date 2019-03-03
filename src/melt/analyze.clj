@@ -1,5 +1,6 @@
 (ns melt.analyze
-  (:require [clojure.java.io :as io]
+  (:require [clj-memory-meter.core :as mm]
+            [clojure.java.io :as io]
             [clojure.java.jdbc :as jdbc]
             [clojure.pprint :refer [pprint]]
             [melt.channel :as ch]
@@ -19,13 +20,14 @@
   (mkdirs dir-name)
   (doseq [table schema]
     (with-open [wr (sample-writer dir-name table)]
-      (let [name       (mdb/qualified-table-name table)
-            sample-sql (str "Select TOP 10 * From " name)
-            count-sql  (str "Select count(*) c From " name)]
+      (let [name    (mdb/qualified-table-name table)
+            all-sql (str "Select * From " name)]
         (println "Sampling " name)
         (binding [*out* wr]
-          (println "Count:" (:c (first (jdbc/query db [count-sql]))))
-          (pprint (jdbc/query db [sample-sql])))))))
+          (let [all (jdbc/query db [all-sql])]
+            (println "Count:" (count all))
+            (println "Estimated size:" (mm/measure all))
+            (pprint (take 10 all))))))))
 
 (defn write-sample
   ([channels] (write-sample channels "target/data-samples"))
