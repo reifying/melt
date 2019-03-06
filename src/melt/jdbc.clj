@@ -2,6 +2,7 @@
   (:require [clojure.data :as data]
             [clojure.java.io :as io]
             [clojure.java.jdbc :as jdbc]
+            [clojure.pprint :refer [pprint]]
             [clojure.spec.alpha :as s]
             [melt.channel :as ch]
             [melt.config :refer [db ignorable-schemas schema-file-path
@@ -66,7 +67,7 @@
 
 (defn save-schema
   ([] (save-schema (schema)))
-  ([coll] (spit (cached-schema-file) (pr-str coll))))
+  ([coll] (spit (cached-schema-file) (with-out-str (pprint coll)))))
 
 (defn schema-diff []
   (let [cached (cached-schema)
