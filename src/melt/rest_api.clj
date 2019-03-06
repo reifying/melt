@@ -39,7 +39,8 @@
     results))
 
 (defn entities [context topic]
-  (vals (get-in context [:request :database :data topic])))
+  (if-let [topic-data (get-in context [:request :database :data topic])]
+    (or (vals topic-data) [])))
 
 (defn topic-view [topic]
   {:name  :topic-view
@@ -71,8 +72,6 @@
 
 (defn- fully-consume [consumer-props topics]
   (rt/read-topics-loop consumer-props topics 1))
-
-;; TODO ensure query for topic with no data returns empty list
 
 (defn start-api [consumer-props topics port]
   (println "Loading topic data")

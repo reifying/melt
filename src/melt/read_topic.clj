@@ -6,6 +6,9 @@
 
 (def empty-data {:offsets {}})
 
+(defn empty-data-for [topics]
+  (assoc empty-data :data (into {} (map (fn [topic] [topic {}]) topics))))
+
 (defn- partition-infos [c topics]
   (let [topics (set topics)]
     (filter #(topics (first %)) (into {} (.listTopics c)))))
@@ -117,7 +120,7 @@
 
 (defn read-topics-loop [consumer-props topics retries]
   (with-open [c (consumer-at-beginning consumer-props topics)]
-    (loop [topic-data empty-data
+    (loop [topic-data (empty-data-for topics)
            retries    retries]
       (if (<= retries 0)
         topic-data
