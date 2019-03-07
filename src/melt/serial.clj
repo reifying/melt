@@ -17,6 +17,13 @@
 (defn read-str [s]
   (json/read-str s :key-fn keyword))
 
+(defn read-key
+  "Deserialize JSON if it's obvious it's a JSON object, otherwise return as-is."
+  [s]
+  (if (= \{ (first s))
+    (read-str s)
+    s))
+
 (def lossy-identity (comp read-str write-str))
 
 (defn fuzz [table-map]

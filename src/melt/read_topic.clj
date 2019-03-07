@@ -47,7 +47,7 @@
 
 (defn record [^ConsumerRecord cr]
   {:value     (serial/read-str (.value cr))
-   :key       (serial/read-str (.key cr))
+   :key       (serial/read-key (.key cr))
    :offset    (.offset cr)
    :partition (.partition cr)
    :timestamp (.timestamp cr)
