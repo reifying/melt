@@ -51,31 +51,37 @@
                 (assoc context :result filtered :topic topic))
               context))})
 
-(defn topic-query-route [db-interceptor topic]
-  (let [common-interceptors [http/json-body entity-render db-interceptor]
-        path                (str "/" topic)]
+(defn topic-query-route [common-interceptors topic]
+  (let [path                (str "/" topic)]
     (println "Creating route for " path)
     [path
      :get
      (conj common-interceptors (topic-view topic))
      :route-name (keyword (str topic "-query"))]))
 
-(defn routes [topics topic-data]
-  (route/expand-routes
-   (set (map (partial topic-query-route (db-interceptor topic-data))
-             topics))))
+(defn common-interceptors [interceptors topic-data]
+  (-> (apply conj [http/json-body entity-render] interceptors)
+      (conj (db-interceptor topic-data))))
 
-(defn start-server [topics topic-data port]
-  (http/start (http/create-server {::http/routes (routes topics topic-data)
+(defn routes [topics topic-data interceptors]
+  (let [common-interceptors (common-interceptors interceptors topic-data)]
+    (route/expand-routes
+     (set (map (partial topic-query-route common-interceptors)
+               topics)))))
+
+(defn start-server [topics topic-data port interceptors]
+  (http/start (http/create-server {::http/routes (routes topics topic-data interceptors)
                                    ::http/type   :jetty
                                    ::http/port   port})))
 
 (defn- fully-consume [consumer-props topics]
   (rt/read-topics-loop consumer-props topics 1))
 
-(defn start-api [consumer-props topics port]
+(defn start-api [consumer-props topics & {:keys [port interceptors]
+                                          :or   {port         3000
+                                                 interceptors []}}]
   (println "Loading topic data")
   (let [topic-data (atom (fully-consume consumer-props topics))]
     (with-open [c (rt/background-consume consumer-props topics topic-data)]
       (println "Starting http server")
-      (start-server topics topic-data port))))
+      (start-server topics topic-data port interceptors))))
