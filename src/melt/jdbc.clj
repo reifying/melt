@@ -40,7 +40,9 @@
   (contains? table-set (table column-map)))
 
 (defn schema []
-  (let [table-set (table-set)]
+  (let [table-set (table-set)
+        id        (fn [t] (clojure.string/join
+                           "." ((juxt ::ch/cat ::ch/schema ::ch/name) t)))]
     (jdbc/with-db-metadata [md db]
       (->> (.getColumns md nil nil "%" nil)
            jdbc/metadata-query
@@ -48,7 +50,7 @@
            (reduce group-by-table {})
            (map #(apply merge %))
            (map #(assoc % ::ch/keys (primary-keys %)))
-           set))))
+           (apply sorted-set-by #(compare (id %1) (id %2)))))))
 
 (defn schema->channels [topic-fn]
   (map #(assoc % ::ch/topic-fn topic-fn) (schema)))
