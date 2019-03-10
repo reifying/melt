@@ -27,7 +27,7 @@
   (reset-consumer (KafkaConsumer. consumer-props) topics))
 
 (defn record [^ConsumerRecord cr]
-  {:value     (serial/read-str (.value cr))
+  {:value     (if-let [v (.value cr)] (serial/read-str v)) ; else tombstone
    :key       (serial/read-str (.key cr) :key-fn keyword)
    :offset    (.offset cr)
    :partition (.partition cr)
@@ -37,7 +37,7 @@
 (defn at-end? [consumed-offsets [^TopicPartition p end-offset]]
   (or (zero? end-offset)
       (if-let [committed-offset (get-in consumed-offsets [(.topic p) (.partition p)])]
-    (<= end-offset (inc committed-offset))
+        (<= end-offset (inc committed-offset))
         false)))
 
 (defn end-offsets [^Consumer c]
