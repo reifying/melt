@@ -95,9 +95,15 @@
 (defn select-all-sql [table]
   (str "Select * From " (qualified-table-name table)))
 
+(defn- channel-keys [channel row]
+  (let [[keyed-type _] (s/conform ::ch/keyed channel)]
+    (case keyed-type
+          ::ch/key-list (select-keys row (::ch/keys channel))
+          ::ch/key-fn   ((::ch/key-fn channel) row))))
+
 (defn- merge-query [channel sql]
   (letfn [(merge-by-key [m row]
-            (assoc m (select-keys row (::ch/keys channel)) row))
+            (assoc m (channel-keys channel row) row))
           (apply-transform [rows]
                            (let [xfn (::ch/transform-fn channel)]
                              (if xfn (map xfn rows) rows)))]
