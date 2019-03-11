@@ -88,3 +88,11 @@
         (fn [] (do (Thread/sleep 5000)
                    (s/sync sync-consumer-props producer-props table)))))
       (v/verify consumer-props table 20 1) => true)
+
+(fact "Deleted table entries will result in tombstone on topic"
+      (jdbc/delete! db "SalesLT.CustomerAddress" ["addressid = ?" 888]) => [1]
+      (jdbc/delete! db "saleslt.address" ["addressid = ?" 888]) => [1]
+      (s/sync sync-consumer-props producer-props table)
+      (let [topic-content (rt/read-topics consumer-props ["melt.SalesLT.Address"])]
+        (find (get topic-content "melt.SalesLT.Address") {:addressid 888})
+        => [{:addressid 888} nil]))

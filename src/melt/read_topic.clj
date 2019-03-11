@@ -46,7 +46,7 @@
   (consumer-at-offsets (KafkaConsumer. consumer-props) topics offsets))
 
 (defn record [^ConsumerRecord cr]
-  {:value     (serial/read-str (.value cr))
+  {:value     (if-let [v (.value cr)] (serial/read-str v)) ; else tombstone
    :key       (serial/read-key (.key cr))
    :offset    (.offset cr)
    :partition (.partition cr)

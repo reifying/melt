@@ -10,13 +10,26 @@
              (serial/write-str k)
              (serial/write-str v))))
 
-(defn sync-with-producer [db-only producer-options]
-  (lk/with-producer
-    (fn [p] (sync-with-sender db-only (lk/default-send-fn p)))
-    producer-options))
+(defn deleted [diff]
+  (apply dissoc
+         (:topic-only diff)
+         (keys (:table-only diff))))
+
+(defn send-tombstones [deleted send-fn]
+  (doseq [[[topic k] _] deleted]
+    (send-fn topic
+             (serial/write-str k)
+             nil)))
 
 (defn sync [consumer-props producer-props channel]
-  (let [diff (diff consumer-props channel)]
-    (if (seq (:table-only diff))
-      (sync-with-producer (:table-only diff)
-                          {:producer-properties producer-props}))))
+  (let [diff       (diff consumer-props channel)
+        table-only (seq (:table-only diff))
+        deleted    (seq (deleted diff))]
+    (if (or deleted table-only)
+      (lk/with-producer
+        (fn [p]
+          (if table-only
+            (sync-with-sender table-only (lk/default-send-fn p)))
+          (if deleted
+            (send-tombstones deleted (lk/default-send-fn p))))
+        {:producer-properties producer-props}))))
