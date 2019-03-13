@@ -23,11 +23,11 @@
   (= (serial/fuzz channel-data)
      (diff/merge-topic-key (:data topic-data))))
 
-(defn verify [consumer-props channel retries retry-delay-sec]
+(defn verify [db consumer-props channel retries retry-delay-sec]
   (with-open [c (KafkaConsumer. consumer-props)]
     (loop [prev-topic-data rt/empty-data
            retries         retries]
-      (let [channel-data (diff/by-topic-key channel)
+      (let [channel-data (diff/by-topic-key db channel)
             topic-data   (refresh c prev-topic-data (diff/topics channel-data))
             matches      (matches channel-data topic-data)]
         (if (or matches (<= retries 0))

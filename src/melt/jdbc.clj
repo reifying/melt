@@ -101,7 +101,7 @@
           ::ch/key-list (select-keys row (::ch/keys channel))
           ::ch/key-fn   ((::ch/key-fn channel) row))))
 
-(defn- merge-query [channel sql]
+(defn- merge-query [db channel sql]
   (letfn [(merge-by-key [m row]
             (assoc m (channel-keys channel row) row))
           (apply-transform [rows]
@@ -109,15 +109,15 @@
                              (if xfn (map xfn rows) rows)))]
     (reduce merge-by-key {} (apply-transform (jdbc/query db [sql])))))
 
-(defmethod ch/read-channel ::ch/query [query]
-  (merge-query query (::ch/sql query)))
+(defmethod ch/read-channel ::ch/query [db query]
+  (merge-query db query (::ch/sql query)))
 
-(defmethod ch/read-channel ::ch/table [table]
-  (merge-query table (select-all-sql table)))
+(defmethod ch/read-channel ::ch/table [db table]
+  (merge-query db table (select-all-sql table)))
 
-(defn channel-content [channels]
+(defn channel-content [db channels]
   (map (fn [c] {::ch/channel c
-                ::ch/records (ch/read-channel c)})
+                ::ch/records (ch/read-channel db c)})
        channels))
 
 (s/fdef channel-content

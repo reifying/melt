@@ -34,9 +34,6 @@
   (doto consumer-props
     (.put "group.id" "melt.integration-test.sync")))
 
-(if (= "TRUE" (System/getenv "RESET_INTEGRATION"))
-  (jdbc/update! db "saleslt.address" {:postalcode "98626"} ["addressid = ?" 888]))
-
 (def schema-channels (map #(assoc % ::ch/topic-fn table->topic-name) (mdb/schema)))
 
 (def table (first (filter #(= (::ch/name %) "Address") schema-channels)))
@@ -58,41 +55,45 @@
          "addressid"     603}))
 
 (fact "`diff` finds no differences between a source table and target topic after initial load"
-      (d/diff consumer-props table)
+      (d/diff db consumer-props table)
       =>
       {:table-only {}
        :topic-only {}})
 
-(fact "`diff` finds differences when the table has changed"
-      (jdbc/update! db "saleslt.address" {:postalcode "99995"} ["addressid = ?" 888]) => [1]
+(jdbc/with-db-transaction [t-con db]
+  (jdbc/db-set-rollback-only! t-con)
 
-      (let [diff (d/diff consumer-props table)]
-        (get-in diff [:table-only ["melt.SalesLT.Address" {:addressid 888}]]) => (contains {:postalcode "99995"})
-        (get-in diff [:topic-only ["melt.SalesLT.Address" {:addressid 888}]]) => (contains {"postalcode" "98626"})))
+  (fact "`diff` finds differences when the table has changed"
+        (jdbc/update! t-con "saleslt.address" {:postalcode "99995"} ["addressid = ?" 888]) => [1]
 
-(fact "`sync` publishes differences in a table to the topic to bring them back in sync"
-      (s/sync consumer-props producer-props table)
-      (d/diff consumer-props table)
-      =>
-      {:table-only {}
-       :topic-only {}})
+        (let [diff (d/diff t-con consumer-props table)]
+          (get-in diff [:table-only ["melt.SalesLT.Address" {:addressid 888}]]) => (contains {:postalcode "99995"})
+          (get-in diff [:topic-only ["melt.SalesLT.Address" {:addressid 888}]]) => (contains {"postalcode" "98626"})))
 
-(fact "`verify` returns truthy value of whether topic contents match table"
-      (v/verify consumer-props table 0 1) => true
-      (jdbc/update! db "saleslt.address" {:postalcode "99994"} ["addressid = ?" 888]) => [1]
-      (v/verify consumer-props table 0 1) => false)
+  (fact "`sync` publishes differences in a table to the topic to bring them back in sync"
+        (s/sync t-con consumer-props producer-props table)
+        (d/diff t-con consumer-props table)
+        =>
+        {:table-only {}
+         :topic-only {}}))
 
-(fact "`verify` can retry to reduce false-positives for active channels"
-      (.start
-       (Thread.
-        (fn [] (do (Thread/sleep 5000)
-                   (s/sync sync-consumer-props producer-props table)))))
-      (v/verify consumer-props table 20 1) => true)
+(jdbc/with-db-transaction [t-con db]
+  (jdbc/db-set-rollback-only! t-con)
+
+  (fact "`verify` returns truthy value of whether topic contents match table"
+        (v/verify t-con consumer-props table 0 1) => false)
+
+  (fact "`verify` can retry to reduce false-positives for active channels"
+        (future (Thread/sleep 5000)
+                (s/sync t-con sync-consumer-props producer-props table))
+        (v/verify t-con consumer-props table 20 1) => true))
 
 (fact "Deleted table entries will result in tombstone on topic"
-      (jdbc/delete! db "SalesLT.CustomerAddress" ["addressid = ?" 888]) => [1]
-      (jdbc/delete! db "saleslt.address" ["addressid = ?" 888]) => [1]
-      (s/sync sync-consumer-props producer-props table)
-      (let [topic-content (rt/read-topics consumer-props ["melt.SalesLT.Address"])]
-        (find (get topic-content "melt.SalesLT.Address") {:addressid 888})
-        => [{:addressid 888} nil]))
+      (jdbc/with-db-transaction [t-con db]
+        (jdbc/db-set-rollback-only! t-con)
+        (jdbc/delete! t-con "SalesLT.CustomerAddress" ["addressid = ?" 888]) => [1]
+        (jdbc/delete! t-con "saleslt.address" ["addressid = ?" 888]) => [1]
+        (s/sync t-con sync-consumer-props producer-props table)
+        (let [topic-content (rt/read-topics consumer-props ["melt.SalesLT.Address"])]
+          (find (get topic-content "melt.SalesLT.Address") {:addressid 888})
+          => nil)))

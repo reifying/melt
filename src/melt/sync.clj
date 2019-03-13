@@ -21,8 +21,8 @@
              (serial/write-str k)
              nil)))
 
-(defn sync [consumer-props producer-props channel]
-  (let [diff       (diff consumer-props channel)
+(defn sync [db consumer-props producer-props channel]
+  (let [diff       (diff db consumer-props channel)
         table-only (seq (:table-only diff))
         deleted    (seq (deleted diff))]
     (if (or deleted table-only)

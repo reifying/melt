@@ -76,10 +76,12 @@
     (count (consumer-seq c {}))))
 
 (defn- merge-seq-entry [topic-data seq-entry]
-  (let [{:keys [topic key value]} (:consumer-record seq-entry)]
-    (-> topic-data
-        (assoc-in [:data topic key] value)
-        (update :offsets merge (:offsets seq-entry)))))
+  (let [{:keys [topic key value]} (:consumer-record seq-entry)
+        data                      (update topic-data :offsets
+                                          merge (:offsets seq-entry))]
+    (if (some? value)
+      (assoc-in data [:data topic key] value)
+      (update-in data [:data topic] dissoc key))))
 
 (defn reduce-consumer-seq [c topic-data]
   (reduce merge-seq-entry topic-data (consumer-seq c (:offsets topic-data))))

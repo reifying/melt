@@ -2,6 +2,7 @@
   (:require [clj-time.coerce :refer [to-sql-time]]
             [clj-time.local :as l]
             [midje.sweet :refer [fact =>]]
+            [melt.config :refer [db]]
             [melt.jdbc :as mdb]
             [melt.channel :as ch]))
 
@@ -35,10 +36,10 @@
                      :keys    [:salesorderid]})
 
 (fact "`read-table` reads all the rows of a table and creates a map on primary keys"
-      (get (ch/read-channel #:melt.channel{:name   "CustomerAddress"
-                                           :cat    "AdventureWorks"
-                                           :schema "SalesLT"
-                                           :keys   [:customerid :addressid]})
+      (get (ch/read-channel db #:melt.channel{:name   "CustomerAddress"
+                                              :cat    "AdventureWorks"
+                                              :schema "SalesLT"
+                                              :keys   [:customerid :addressid]})
            {:customerid 29926
             :addressid  638})
       =>
@@ -53,11 +54,11 @@
                                 "."
                                 ((juxt :customerid :addressid) m)))]
         (get
-         (ch/read-channel #:melt.channel{:name   "CustomerAddress"
-                                         :cat    "AdventureWorks"
-                                         :schema "SalesLT"
-                                         :keys   [:customerid :addressid]
-                                         :key-fn concat-keys})
+         (ch/read-channel db #:melt.channel{:name   "CustomerAddress"
+                                            :cat    "AdventureWorks"
+                                            :schema "SalesLT"
+                                            :keys   [:customerid :addressid]
+                                            :key-fn concat-keys})
          "29926.638")
         =>
         {:customerid   29926

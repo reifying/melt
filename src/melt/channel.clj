@@ -16,4 +16,4 @@
 
 (s/def ::content (s/keys :req [::channel ::records]))
 
-(defmulti read-channel #(key (conform-or-throw ::channel %)))
+(defmulti read-channel (fn [_ ch] (key (conform-or-throw ::channel ch))))

@@ -4,8 +4,8 @@
             [melt.read-topic :as rt]
             [melt.serial :as serial]))
 
-(defn by-topic-key [channel]
-  (let [content  (ch/read-channel channel)
+(defn by-topic-key [db channel]
+  (let [content  (ch/read-channel db channel)
         topic-fn (::ch/topic-fn channel)]
     (reduce-kv (fn [m k v]
                  (let [topic (topic-fn channel v)]
@@ -23,8 +23,8 @@
 (defn topics [m]
   (distinct (map first (keys m))))
 
-(defn diff [consumer-props channel]
-  (let [channel-map (by-topic-key channel)
+(defn diff [db consumer-props channel]
+  (let [channel-map (by-topic-key db channel)
         topic-map   (topic-map consumer-props (topics channel-map))
         diff        (data/diff (serial/fuzz channel-map) topic-map)]
     {:table-only (select-keys channel-map (map key (first diff)))
