@@ -1,14 +1,11 @@
 (ns melt.sync
   (:require [melt.diff :refer [diff]]
-            [melt.load-kafka :as lk]
-            [melt.serial :as serial])
+            [melt.load-kafka :as lk])
   (:refer-clojure :exclude [sync]))
 
 (defn sync-with-sender [db-only send-fn]
   (doseq [[[topic k] v] db-only]
-    (send-fn topic
-             (serial/write-str k)
-             (serial/write-str v))))
+    (send-fn topic k v)))
 
 (defn deleted [diff]
   (apply dissoc
@@ -17,9 +14,7 @@
 
 (defn send-tombstones [deleted send-fn]
   (doseq [[[topic k] _] deleted]
-    (send-fn topic
-             (serial/write-str k)
-             nil)))
+    (send-fn topic k nil)))
 
 (defn sync [db consumer-props producer-props channel]
   (let [diff       (diff db consumer-props channel)

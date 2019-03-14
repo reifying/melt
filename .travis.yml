@@ -7,7 +7,7 @@ services:
   - docker
 
 install: 
-  - clojure -e '(println "Downloaded deps")'
+  - build/compile.sh
 
 script: 
   - build/run_tests.sh

@@ -16,18 +16,22 @@
 (def bootstrap-servers
   (str (or (System/getenv "MELT_KAFKA_HOST") "localhost") ":9092"))
 
+(def serializer "melt.Serializer")
+
 (def producer-props
   (doto (java.util.Properties.)
     (.put "bootstrap.servers" bootstrap-servers)
     (.put "acks" "all")
-    (.put "key.serializer" "org.apache.kafka.common.serialization.StringSerializer")
-    (.put "value.serializer" "org.apache.kafka.common.serialization.StringSerializer")))
+    (.put "key.serializer" serializer)
+    (.put "value.serializer" serializer)))
+
+(def deserializer "melt.Deserializer")
 
 (def consumer-props
   (doto (java.util.Properties.)
     (.put "bootstrap.servers" bootstrap-servers)
-    (.put "key.deserializer" "org.apache.kafka.common.serialization.StringDeserializer")
-    (.put "value.deserializer" "org.apache.kafka.common.serialization.StringDeserializer")
+    (.put "key.deserializer" deserializer)
+    (.put "value.deserializer" deserializer)
     (.put "group.id" "melt.integration-test")))
 
 (def sync-consumer-props
@@ -44,15 +48,15 @@
       (let [topic-content (rt/read-topics consumer-props ["melt.SalesLT.Address"])]
         (get-in topic-content ["melt.SalesLT.Address" {:addressid 603}])
         =>
-        {"city"          "Killeen"
-         "addressline2"  nil
-         "modifieddate"  "2007-08-01"
-         "rowguid"       "0E6E9E86-A637-4FD5-A945-AC342BFD715B"
-         "postalcode"    "76541"
-         "addressline1"  "9500b E. Central Texas Expressway"
-         "countryregion" "United States"
-         "stateprovince" "Texas"
-         "addressid"     603}))
+        {:city          "Killeen"
+         :addressline2  nil
+         :modifieddate  "2007-08-01"
+         :rowguid       "0E6E9E86-A637-4FD5-A945-AC342BFD715B"
+         :postalcode    "76541"
+         :addressline1  "9500b E. Central Texas Expressway"
+         :countryregion "United States"
+         :stateprovince "Texas"
+         :addressid     603}))
 
 (fact "`diff` finds no differences between a source table and target topic after initial load"
       (d/diff db consumer-props table)
@@ -68,7 +72,7 @@
 
         (let [diff (d/diff t-con consumer-props table)]
           (get-in diff [:table-only ["melt.SalesLT.Address" {:addressid 888}]]) => (contains {:postalcode "99995"})
-          (get-in diff [:topic-only ["melt.SalesLT.Address" {:addressid 888}]]) => (contains {"postalcode" "98626"})))
+          (get-in diff [:topic-only ["melt.SalesLT.Address" {:addressid 888}]]) => (contains {:postalcode "98626"})))
 
   (fact "`sync` publishes differences in a table to the topic to bring them back in sync"
         (s/sync t-con consumer-props producer-props table)
@@ -97,3 +101,5 @@
         (let [topic-content (rt/read-topics consumer-props ["melt.SalesLT.Address"])]
           (find (get topic-content "melt.SalesLT.Address") {:addressid 888})
           => nil)))
+
+(shutdown-agents)

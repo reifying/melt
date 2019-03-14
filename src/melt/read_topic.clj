@@ -1,5 +1,4 @@
 (ns melt.read-topic
-  (:require [melt.serial :as serial])
   (:import [org.apache.kafka.clients.consumer Consumer KafkaConsumer ConsumerRecord]
            [org.apache.kafka.common TopicPartition])
   (:refer-clojure :exclude [poll]))
@@ -27,8 +26,8 @@
   (reset-consumer (KafkaConsumer. consumer-props) topics))
 
 (defn record [^ConsumerRecord cr]
-  {:value     (if-let [v (.value cr)] (serial/read-str v)) ; else tombstone
-   :key       (serial/read-str (.key cr) :key-fn keyword)
+  {:value     (.value cr)
+   :key       (.key cr)
    :offset    (.offset cr)
    :partition (.partition cr)
    :timestamp (.timestamp cr)

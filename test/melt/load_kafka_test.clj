@@ -12,9 +12,9 @@
 
 (defn assoc-send-fn [records-atom]
   (fn [_ k v] (swap! records-atom
-                     (fn [m] (assoc m
-                                    (serial/read-str k)
-                                    (serial/read-str v))))))
+                     (fn [m] (assoc m 
+                                    (serial/lossy-identity k)
+                                    (serial/lossy-identity v))))))
 
 (defn topic-fn [channel v]
   (str "melt." (::ch/schema channel) "." (::ch/name channel)))
@@ -47,24 +47,24 @@
         (lk/load-with-sender [channel] sender-fn)
         @records
         =>
-        {{"addressid" 9}  {"addressid"     9
-                           "addressline1"  "8713 Yosemite Ct."
-                           "addressline2"  nil
-                           "city"          "Bothell"
-                           "countryregion" "United States"
-                           "modifieddate"  "2006-07-01"
-                           "postalcode"    "98011"
-                           "rowguid"       "268AF621-76D7-4C78-9441-144FD139821A"
-                           "stateprovince" "Washington"}
-         {"addressid" 11} {"addressid"     11
-                           "addressline1"  "1318 Lasalle Street"
-                           "addressline2"  nil
-                           "city"          "Bothell"
-                           "countryregion" "United States"
-                           "modifieddate"  "2007-04-01"
-                           "postalcode"    "98011"
-                           "rowguid"       "981B3303-ACA2-49C7-9A96-FB670785B269"
-                           "stateprovince" "Washington"}}))
+        {{:addressid 9}  {:addressid     9
+                           :addressline1  "8713 Yosemite Ct."
+                           :addressline2  nil
+                           :city          "Bothell"
+                           :countryregion "United States"
+                           :modifieddate  "2006-07-01"
+                           :postalcode    "98011"
+                           :rowguid       "268AF621-76D7-4C78-9441-144FD139821A"
+                           :stateprovince "Washington"}
+         {:addressid 11} {:addressid     11
+                           :addressline1  "1318 Lasalle Street"
+                           :addressline2  nil
+                           :city          "Bothell"
+                           :countryregion "United States"
+                           :modifieddate  "2007-04-01"
+                           :postalcode    "98011"
+                           :rowguid       "981B3303-ACA2-49C7-9A96-FB670785B269"
+                           :stateprovince "Washington"}}))
 
 (fact "`load-with-sender` respects channel's transform-fn"
       (let [records   (atom {})
@@ -81,21 +81,21 @@
         (lk/load-with-sender [channel] sender-fn)
         @records
         =>
-        {{"addressid" 9}  {"addressid"     9
-                           "addressline1"  1
-                           "addressline2"  1
-                           "city"          1
-                           "countryregion" 1
-                           "modifieddate"  1
-                           "postalcode"    1
-                           "rowguid"       1
-                           "stateprovince" 1}
-         {"addressid" 11} {"addressid"     11
-                           "addressline1"  1
-                           "addressline2"  1
-                           "city"          1
-                           "countryregion" 1
-                           "modifieddate"  1
-                           "postalcode"    1
-                           "rowguid"       1
-                           "stateprovince" 1}}))
+        {{:addressid 9}  {:addressid     9
+                           :addressline1  1
+                           :addressline2  1
+                           :city          1
+                           :countryregion 1
+                           :modifieddate  1
+                           :postalcode    1
+                           :rowguid       1
+                           :stateprovince 1}
+         {:addressid 11} {:addressid     11
+                           :addressline1  1
+                           :addressline2  1
+                           :city          1
+                           :countryregion 1
+                           :modifieddate  1
+                           :postalcode    1
+                           :rowguid       1
+                           :stateprovince 1}}))

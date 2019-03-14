@@ -1,8 +1,7 @@
 (ns melt.load-kafka
   (:require [melt.channel :as ch]
             [melt.config :as c]
-            [melt.jdbc :as mdb]
-            [melt.serial :as serial])
+            [melt.jdbc :as mdb])
   (:import [org.apache.kafka.clients.producer KafkaProducer ProducerRecord]))
 
 (defn with-producer [callback {:keys [producer producer-properties]}]
@@ -18,9 +17,7 @@
   (doseq [#::ch{:keys [channel records]} (mdb/channel-content c/db channels)]
     (let [topic-fn (::ch/topic-fn channel)]
       (doseq [[k v] records]
-        (send-fn (topic-fn channel v)
-                 (serial/write-str k)
-                 (serial/write-str v))))))
+        (send-fn (topic-fn channel v) k v)))))
 
 (defn load-with-producer [channels producer-options]
   (with-producer
