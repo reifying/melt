@@ -15,9 +15,12 @@
 
 (defn load-with-sender [channels send-fn]
   (doseq [#::ch{:keys [channel records]} (mdb/channel-content c/db channels)]
-    (let [topic-fn (::ch/topic-fn channel)]
+    (let [name     (or (::ch/name channel) (::ch/sql channel))
+          topic-fn (::ch/topic-fn channel)]
+      (println "Starting to load" name)
       (doseq [[k v] records]
-        (send-fn (topic-fn channel v) k v)))))
+        (send-fn (topic-fn channel v) k v))
+      (println "Completed loading" name))))
 
 (defn load-with-producer [channels producer-options]
   (with-producer
