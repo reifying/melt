@@ -38,7 +38,9 @@
   (doto consumer-props
     (.put "group.id" "melt.integration-test.sync")))
 
-(def schema-channels (map #(assoc % ::ch/topic-fn table->topic-name) (mdb/schema)))
+(def schema (mdb/schema))
+
+(def schema-channels (map #(assoc % ::ch/topic-fn table->topic-name) schema))
 
 (def table (first (filter #(= (::ch/name %) "Address") schema-channels)))
 
@@ -101,5 +103,25 @@
         (let [topic-content (rt/read-topics consumer-props ["melt.SalesLT.Address"])]
           (find (get topic-content "melt.SalesLT.Address") {:addressid 888})
           => nil)))
+
+(fact "`identity` can be used for key-fn for tables lacking primary keys"
+      (let [identity-keyfn-topic  (fn [#:melt.channel{:keys [schema name]} _]
+                                    (str "melt.keyfn." schema "." name))
+            keyfn-schema-channels (map #(merge % {::ch/topic-fn identity-keyfn-topic
+                                                  ::ch/key-fn   identity}) schema)
+            sample-value          {:city          "Killeen"
+                                   :addressline2  nil
+                                   :modifieddate  "2007-08-01"
+                                   :rowguid       "0E6E9E86-A637-4FD5-A945-AC342BFD715B"
+                                   :postalcode    "76541"
+                                   :addressline1  "9500b E. Central Texas Expressway"
+                                   :countryregion "United States"
+                                   :stateprovince "Texas"
+                                   :addressid     603}]
+        (lk/load-with-producer keyfn-schema-channels
+                               {:producer-properties producer-props})
+        (let [topic-content (rt/read-topics consumer-props ["melt.keyfn.SalesLT.Address"])]
+          (get-in topic-content ["melt.keyfn.SalesLT.Address" sample-value])
+          => sample-value)))
 
 (shutdown-agents)

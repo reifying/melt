@@ -21,7 +21,19 @@ for TOPIC in \
     "melt.SalesLT.SalesOrderDetail" \
     "melt.SalesLT.Address" \
     "melt.SalesLT.ProductCategory" \
-    "melt.dbo.ErrorLog"
+    "melt.dbo.ErrorLog" \
+    "melt.keyfn.SalesLT.CustomerAddress" \
+    "melt.keyfn.SalesLT.ProductModelProductDescription" \
+    "melt.keyfn.SalesLT.Product" \
+    "melt.keyfn.dbo.BuildVersion" \
+    "melt.keyfn.SalesLT.SalesOrderHeader" \
+    "melt.keyfn.SalesLT.ProductDescription" \
+    "melt.keyfn.SalesLT.Customer" \
+    "melt.keyfn.SalesLT.ProductModel" \
+    "melt.keyfn.SalesLT.SalesOrderDetail" \
+    "melt.keyfn.SalesLT.Address" \
+    "melt.keyfn.SalesLT.ProductCategory" \
+    "melt.keyfn.dbo.ErrorLog"
   do
     docker exec -it kafka-broker /bin/sh -c "/opt/kafka/bin/kafka-topics.sh --zookeeper \$KAFKA_ZOOKEEPER_CONNECT --create --partitions 1 --replication-factor 1 --topic $TOPIC"
 done
