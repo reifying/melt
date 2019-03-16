@@ -107,7 +107,11 @@
           (apply-transform [rows]
                            (let [xfn (::ch/transform-fn channel)]
                              (if xfn (map xfn rows) rows)))]
-    (reduce merge-by-key {} (apply-transform (jdbc/query db [sql])))))
+    (println (java.util.Date.) "Querying:" sql)
+    (let [reduced
+          (time (reduce merge-by-key {} (apply-transform (jdbc/query db [sql]))))]
+      (println (java.util.Date.) "Reduced:" sql)
+      reduced)))
 
 (defmethod ch/read-channel ::ch/query [db query]
   (merge-query db query (::ch/sql query)))
