@@ -58,6 +58,9 @@
 (defn track-all [schema]
   (doall (map track-table (trackable-untracked schema))))
 
+(defn print-track-all [schema]
+  (doall (map #(do (println (track-table-sql %)) (println "GO")) (trackable-untracked schema))))
+
 (defn untrack-all [schema]
   (doseq [table (tracked schema)] (untrack-table table)))
 
