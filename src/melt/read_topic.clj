@@ -1,4 +1,5 @@
 (ns melt.read-topic
+  (:require [melt.kafka :as k])
   (:import [org.apache.kafka.clients.consumer Consumer KafkaConsumer ConsumerRecord]
            [org.apache.kafka.common TopicPartition])
   (:refer-clojure :exclude [poll]))
@@ -21,9 +22,6 @@
     (doseq [[partition offset] (.beginningOffsets consumer tps)]
       (.seek consumer partition offset)))
   consumer)
-
-(defn consumer-at-beginning [consumer-props topics]
-  (reset-consumer (KafkaConsumer. consumer-props) topics))
 
 (defn record [^ConsumerRecord cr]
   {:value     (.value cr)
@@ -70,9 +68,11 @@
       (if-not (stop-consuming-fn current-offsets)
         (consumer-seq c current-offsets stop-consuming-fn (poll c)))))))
 
-(defn count-topic [consumer-props topic]
-  (with-open [c (consumer-at-beginning consumer-props [topic])]
-    (count (consumer-seq c {}))))
+(defn count-topic [c-spec topic]
+  (k/with-consumer [c-spec c-spec]
+    (let [c (k/consumer c-spec)]
+      (reset-consumer c [topic])
+      (count (consumer-seq c {})))))
 
 (defn- merge-seq-entry [topic-data seq-entry]
   (let [{:keys [topic key value]} (:consumer-record seq-entry)
@@ -85,32 +85,36 @@
 (defn reduce-consumer-seq [c topic-data]
   (reduce merge-seq-entry topic-data (consumer-seq c (:offsets topic-data))))
 
-(defn- background-consume-fn [consumer-props topics reduced-atom shutdown-atom]
+(defn- background-consume-fn [c-spec topics reduced-atom shutdown-atom]
   (fn []
-    (with-open [c (consumer-at-beginning consumer-props topics)]
-      (doseq [entry (consumer-seq c {} (fn [_] @shutdown-atom) [])]
-        (swap! reduced-atom (fn [topic-data]
-                              (merge-seq-entry topic-data entry)))))))
+    (k/with-consumer [c-spec c-spec]
+      (let [c (k/consumer c-spec)]
+        (reset-consumer c topics)
+        (doseq [entry (consumer-seq c {} (fn [_] @shutdown-atom) [])]
+          (swap! reduced-atom (fn [topic-data]
+                                (merge-seq-entry topic-data entry))))))))
 
-(defn background-consume [consumer-props topics reduced-atom]
+(defn background-consume [c-spec topics reduced-atom]
   (let [shutdown (atom false)]
     (.start
      (Thread.
-      (background-consume-fn consumer-props topics reduced-atom shutdown)))
+      (background-consume-fn c-spec topics reduced-atom shutdown)))
     (reify java.lang.AutoCloseable
       (close [this] (reset! shutdown true)))))
 
-(defn read-topics-loop [consumer-props topics retries]
-  (with-open [c (consumer-at-beginning consumer-props topics)]
-    (loop [topic-data empty-data
-           retries    retries]
-      (if (<= retries 0)
-        topic-data
-        (recur (reduce-consumer-seq c topic-data)
-               (dec retries))))))
+(defn read-topics-loop [c-spec topics retries]
+  (k/with-consumer [c-spec c-spec]
+    (let [c (k/consumer c-spec)]
+      (reset-consumer c topics)
+      (loop [topic-data empty-data
+             retries    retries]
+        (if (<= retries 0)
+          topic-data
+          (recur (reduce-consumer-seq c topic-data)
+                 (dec retries)))))))
 
 (defn read-topics
   "Read topics twice since reading a large topic could take minutes by which
    time the original end-offsets may no longer be the true end-offsets"
-  [consumer-props topics]
-  (:data (read-topics-loop consumer-props topics 1)))
+  [c-spec topics]
+  (:data (read-topics-loop c-spec topics 1)))

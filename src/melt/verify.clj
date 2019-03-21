@@ -1,5 +1,6 @@
 (ns melt.verify
   (:require [melt.diff :as diff]
+            [melt.kafka :as k]
             [melt.serial :as serial]
             [melt.read-topic :as rt])
   (:import [org.apache.kafka.clients.consumer KafkaConsumer]))
@@ -23,14 +24,15 @@
   (= (serial/fuzz channel-data)
      (diff/merge-topic-key (:data topic-data))))
 
-(defn verify [db consumer-props channel retries retry-delay-sec]
-  (with-open [c (KafkaConsumer. consumer-props)]
-    (loop [prev-topic-data rt/empty-data
-           retries         retries]
-      (let [channel-data (diff/by-topic-key db channel)
-            topic-data   (refresh c prev-topic-data (diff/topics channel-data))
-            matches      (matches channel-data topic-data)]
-        (if (or matches (<= retries 0))
-          matches
-          (do (sleep retry-delay-sec)
-              (recur topic-data (dec retries))))))))
+(defn verify [db c-spec channel retries retry-delay-sec]
+  (k/with-consumer [c-spec c-spec]
+    (let [c (k/consumer c-spec)]
+      (loop [prev-topic-data rt/empty-data
+             retries         retries]
+        (let [channel-data (diff/by-topic-key db channel)
+              topic-data   (refresh c prev-topic-data (diff/topics channel-data))
+              matches      (matches channel-data topic-data)]
+          (if (or matches (<= retries 0))
+            matches
+            (do (sleep retry-delay-sec)
+                (recur topic-data (dec retries)))))))))

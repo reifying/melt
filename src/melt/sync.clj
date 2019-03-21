@@ -1,5 +1,6 @@
 (ns melt.sync
   (:require [melt.diff :refer [diff]]
+            [melt.kafka :as k]
             [melt.load-kafka :as lk])
   (:refer-clojure :exclude [sync]))
 
@@ -16,15 +17,14 @@
   (doseq [[[topic k] _] deleted]
     (send-fn topic k nil)))
 
-(defn sync [db consumer-props producer-props channel]
-  (let [diff       (diff db consumer-props channel)
+(defn sync [db c-spec p-spec channel]
+  (let [diff       (diff db c-spec channel)
         table-only (seq (:table-only diff))
         deleted    (seq (deleted diff))]
     (if (or deleted table-only)
-      (lk/with-producer
-        (fn [p]
+      (k/with-producer [p-spec p-spec]
+        (let [p (k/producer p-spec)]
           (if table-only
             (sync-with-sender table-only (lk/default-send-fn p)))
           (if deleted
-            (send-tombstones deleted (lk/default-send-fn p))))
-        {:producer-properties producer-props}))))
+            (send-tombstones deleted (lk/default-send-fn p))))))))

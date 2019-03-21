@@ -45,8 +45,7 @@
 (def table (first (filter #(= (::ch/name %) "Address") schema-channels)))
 
 (fact "a table written to a topic may be read from a topic"
-      (lk/load-with-producer schema-channels
-                             {:producer-properties producer-props})
+      (lk/load-with-producer schema-channels producer-props)
       (let [topic-content (rt/read-topics consumer-props ["melt.SalesLT.Address"])]
         (get-in topic-content ["melt.SalesLT.Address" {:addressid 603}])
         =>
@@ -118,8 +117,7 @@
                                    :countryregion "United States"
                                    :stateprovince "Texas"
                                    :addressid     603}]
-        (lk/load-with-producer keyfn-schema-channels
-                               {:producer-properties producer-props})
+        (lk/load-with-producer keyfn-schema-channels producer-props)
         (let [topic-content (rt/read-topics consumer-props ["melt.keyfn.SalesLT.Address"])]
           (get-in topic-content ["melt.keyfn.SalesLT.Address" sample-value])
           => sample-value)))
