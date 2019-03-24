@@ -102,12 +102,9 @@
           ::ch/key-fn   ((::ch/key-fn channel) row))))
 
 (defn- merge-query [db channel sql]
-  (letfn [(merge-by-key [m row]
-            (assoc m (channel-keys channel row) row))
-          (apply-transform [rows]
-                           (let [xfn (::ch/transform-fn channel)]
-                             (if xfn (map xfn rows) rows)))]
-    (reduce merge-by-key {} (apply-transform (jdbc/query db [sql])))))
+  (let [xf     (map (get channel ::ch/transform-fn identity))
+        by-key (fn [m row] (assoc m (channel-keys channel row) row))]
+    (transduce xf (completing by-key) {} (jdbc/reducible-query db [sql]))))
 
 (defmethod ch/read-channel ::ch/query [db query]
   (merge-query db query (::ch/sql query)))
