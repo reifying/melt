@@ -2,4 +2,6 @@
 
 set -e
 
-clojure -Aoutdated -a outdated | grep 'All up to date'
+clojure -Aoutdated -a outdated > deps.log
+cat deps.log
+cat deps.log | grep 'All up to date'
