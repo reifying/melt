@@ -20,18 +20,18 @@
 (defn- sleep [secs]
   (Thread/sleep (* 1000 secs)))
 
-(defn- matches [channel-data topic-data]
-  (= (serial/fuzz channel-data)
+(defn- matches [source-data topic-data]
+  (= (serial/fuzz source-data)
      (diff/merge-topic-key (:data topic-data))))
 
-(defn verify [db c-spec channel retries retry-delay-sec]
+(defn verify [db c-spec source retries retry-delay-sec]
   (k/with-consumer [c-spec c-spec]
     (let [c (k/consumer c-spec)]
       (loop [prev-topic-data rt/empty-data
              retries         retries]
-        (let [channel-data (diff/by-topic-key db channel)
-              topic-data   (refresh c prev-topic-data (diff/topics channel-data))
-              matches      (matches channel-data topic-data)]
+        (let [source-data (diff/by-topic-key db source)
+              topic-data   (refresh c prev-topic-data (diff/topics source-data))
+              matches      (matches source-data topic-data)]
           (if (or matches (<= retries 0))
             matches
             (do (sleep retry-delay-sec)

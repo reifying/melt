@@ -4,28 +4,28 @@
             [clojure.java.jdbc :as jdbc]
             [clojure.pprint :refer [pprint]]
             [clojure.spec.alpha :as s]
-            [melt.channel :as ch]
             [melt.config :refer [db ignorable-schemas schema-file-path
                                  abort-on-schema-change]]
+            [melt.source :as source]
             [melt.util :refer [mkdirs]]))
 
 (defn- user-schema? [{:keys [table_schem]}]
   (not (contains? ignorable-schemas table_schem)))
 
 (defn- table [{:keys [table_schem table_cat table_name]}]
-  #::ch{:name   table_name
+  #::source{:name   table_name
         :cat    table_cat
         :schema table_schem})
 
 (defn- group-by-table
   [table-map column-map]
   (update-in table-map
-             [(table column-map) ::ch/columns]
+             [(table column-map) ::source/columns]
              (fn [columns] (conj columns (:column_name column-map)))))
 
 (defn- primary-keys [table]
   (jdbc/with-db-metadata [md db]
-    (->> (.getPrimaryKeys md (::ch/cat table) (::ch/schema table) (::ch/name table))
+    (->> (.getPrimaryKeys md (::source/cat table) (::source/schema table) (::source/name table))
          jdbc/metadata-query
          (map (comp keyword clojure.string/lower-case :column_name)))))
 
@@ -42,18 +42,15 @@
 (defn schema []
   (let [table-set (table-set)
         id        (fn [t] (clojure.string/join
-                           "." ((juxt ::ch/cat ::ch/schema ::ch/name) t)))]
+                           "." ((juxt ::source/cat ::source/schema ::source/name) t)))]
     (jdbc/with-db-metadata [md db]
       (->> (.getColumns md nil nil "%" nil)
            jdbc/metadata-query
            (filter (partial contains-table? table-set))
            (reduce group-by-table {})
            (map #(apply merge %))
-           (map #(assoc % ::ch/keys (primary-keys %)))
+           (map #(assoc % ::source/keys (primary-keys %)))
            (apply sorted-set-by #(compare (id %1) (id %2)))))))
-
-(defn schema->channels [topic-fn]
-  (map #(assoc % ::ch/topic-fn topic-fn) (schema)))
 
 (defn cached-schema-file []
   (let [f (io/as-file schema-file-path)]
@@ -89,33 +86,20 @@
       false
       diff)))
 
-(defn qualified-table-name [#::ch{:keys [schema name]}]
+(defn qualified-table-name [#::source{:keys [schema name]}]
   (str "[" schema "].[" name "]"))
 
 (defn select-all-sql [table]
   (str "Select * From " (qualified-table-name table)))
 
-(defn- channel-keys [channel row]
-  (let [[keyed-type _] (s/conform ::ch/keyed channel)]
-    (case keyed-type
-          ::ch/key-list (select-keys row (::ch/keys channel))
-          ::ch/key-fn   ((::ch/key-fn channel) row))))
+(defn query-source [db source]
+  (let [sql-params (get source
+                        ::source/sql-params
+                        [(get source ::source/sql (select-all-sql source))])]
+    (jdbc/query db sql-params)))
 
-(defn- merge-query [db channel sql]
-  (let [xf     (map (get channel ::ch/transform-fn identity))
-        by-key (fn [m row] (assoc m (channel-keys channel row) row))]
-    (transduce xf (completing by-key) {} (jdbc/reducible-query db [sql]))))
-
-(defmethod ch/read-channel ::ch/query [db query]
-  (merge-query db query (::ch/sql query)))
-
-(defmethod ch/read-channel ::ch/table [db table]
-  (merge-query db table (select-all-sql table)))
-
-(defn channel-content [db channels]
-  (map (fn [c] {::ch/channel c
-                ::ch/records (ch/read-channel db c)})
-       channels))
-
-(s/fdef channel-content
-  :ret (s/* ::ch/content))
+(defn reducible-source [db source]
+  (let [sql-params (get source
+                        ::source/sql-params
+                        [(get source ::source/sql (select-all-sql source))])]
+    (jdbc/reducible-query db sql-params)))

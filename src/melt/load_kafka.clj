@@ -1,24 +1,34 @@
 (ns melt.load-kafka
-  (:require [melt.channel :as ch]
-            [melt.config :as c]
+  (:require [clojure.spec.alpha :as spec]
             [melt.jdbc :as mdb]
-            [melt.kafka :as k])
+            [melt.kafka :as k]
+            [melt.source :as source])
   (:import [org.apache.kafka.clients.producer KafkaProducer ProducerRecord]))
 
 (defn default-send-fn [producer]
   (fn [topic k v] (.send producer (ProducerRecord. topic k v))))
 
-(defn load-with-sender [channels send-fn]
-  (doseq [#::ch{:keys [channel records]} (mdb/channel-content c/db channels)]
-    (let [name     (or (::ch/name channel) (::ch/sql channel))
-          topic-fn (::ch/topic-fn channel)]
-      (println "Starting to load" name)
-      (doseq [[k v] records]
-        (send-fn (topic-fn channel v) k v))
-      (println "Completed loading" name))))
+(defn- source-desc [source]
+  (or (::source/name source) (::source/sql source)))
 
-(defn load-with-producer [channels p-spec]
+(defn- do-load [db sources send-fn]
+  (doseq [source sources]
+    (let [desc (source-desc source)]
+      (println "Starting to load" desc)
+      (doall (eduction (map (partial source/message source))
+                       (source/xform source)
+                       (map send-fn)
+                       (mdb/query-source db source)))
+      (println "Completed loading" desc))))
+
+(defn load-with-sender [db sources send-fn]
+  (do-load db sources #(apply send-fn ((juxt ::source/topic
+                                             ::source/key
+                                             ::source/value)
+                                       (spec/assert ::source/message %)))))
+
+(defn load-with-producer [db sources p-spec]
   (k/with-producer [p-spec p-spec]
     (let [p (k/producer p-spec)]
-      (load-with-sender channels (default-send-fn p))
+      (load-with-sender db sources (default-send-fn p))
       (.flush p))))

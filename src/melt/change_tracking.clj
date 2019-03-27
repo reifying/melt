@@ -1,7 +1,7 @@
 (ns melt.change-tracking
   (:require [clojure.java.jdbc :as jdbc]
             [clojure.set :refer [difference]]
-            [melt.channel :as ch]
+            [melt.source :as source]
             [melt.config :refer [db]]
             [melt.jdbc :as mdb]))
 
@@ -14,7 +14,7 @@
   (jdbc/execute! db [(enable-change-tracking-sql db-name)]))
 
 (defn qualified-table-name [table]
-  (str (::ch/schema table) "." (::ch/name table)))
+  (str (::source/schema table) "." (::source/name table)))
 
 (defn track-table-sql [table]
   (str "ALTER TABLE " (qualified-table-name table) "
@@ -35,7 +35,7 @@
 
 (defn trackable-tables
   ([] (trackable-tables (mdb/cached-schema)))
-  ([schema] (filter #(seq (::ch/keys %)) schema)))
+  ([schema] (filter #(seq (::source/keys %)) schema)))
 
 (defn list-tracked []
   (map (juxt :schema_name :table_name)
@@ -45,7 +45,7 @@
                      From sys.change_tracking_tables"])))
 
 (defn tracked [schema]
-  (let [m (reduce #(assoc %1 ((juxt ::ch/schema ::ch/name) %2) %2)
+  (let [m (reduce #(assoc %1 ((juxt ::source/schema ::source/name) %2) %2)
                   {}
                   schema)]
     (vals (select-keys m (list-tracked)))))

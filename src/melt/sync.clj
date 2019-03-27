@@ -17,8 +17,8 @@
   (doseq [[[topic k] _] deleted]
     (send-fn topic k nil)))
 
-(defn sync [db c-spec p-spec channel]
-  (let [diff       (diff db c-spec channel)
+(defn sync [db c-spec p-spec source]
+  (let [diff       (diff db c-spec source)
         table-only (seq (:table-only diff))
         deleted    (seq (deleted diff))]
     (if (or deleted table-only)

@@ -1,7 +1,7 @@
 (ns melt.integration-test
   (:require [clojure.java.jdbc :as jdbc]
-            [melt.channel :as ch]
-            [melt.config :refer [db table->topic-name]]
+            [melt.source :as source]
+            [melt.config :refer [db]]
             [melt.diff :as d]
             [melt.jdbc :as mdb]
             [melt.load-kafka :as lk]
@@ -40,12 +40,19 @@
 
 (def schema (mdb/schema))
 
-(def schema-channels (map #(assoc % ::ch/topic-fn table->topic-name) schema))
+(defn topic [source]
+  (str "melt." (::source/schema source) "." (::source/name source)))
 
-(def table (first (filter #(= (::ch/name %) "Address") schema-channels)))
+(defn assoc-topic-xform [source]
+  (map #(assoc % ::source/topic (topic source))))
+
+(def schema-sources
+  (map #(assoc % ::source/xform (assoc-topic-xform %)) schema))
+
+(def table (first (filter #(= (::source/name %) "Address") schema-sources)))
 
 (fact "a table written to a topic may be read from a topic"
-      (lk/load-with-producer schema-channels producer-props)
+      (lk/load-with-producer db schema-sources producer-props)
       (let [topic-content (rt/read-topics consumer-props ["melt.SalesLT.Address"])]
         (get-in topic-content ["melt.SalesLT.Address" {:addressid 603}])
         =>
@@ -88,7 +95,7 @@
   (fact "`verify` returns truthy value of whether topic contents match table"
         (v/verify t-con consumer-props table 0 1) => false)
 
-  (fact "`verify` can retry to reduce false-positives for active channels"
+  (fact "`verify` can retry to reduce false-positives for active sources"
         (future (Thread/sleep 5000)
                 (s/sync t-con sync-consumer-props producer-props table))
         (v/verify t-con consumer-props table 20 1) => true))
@@ -103,21 +110,22 @@
           (find (get topic-content "melt.SalesLT.Address") {:addressid 888})
           => nil)))
 
-(fact "`identity` can be used for key-fn for tables lacking primary keys"
-      (let [identity-keyfn-topic  (fn [#:melt.channel{:keys [schema name]} _]
-                                    (str "melt.keyfn." schema "." name))
-            keyfn-schema-channels (map #(merge % {::ch/topic-fn identity-keyfn-topic
-                                                  ::ch/key-fn   identity}) schema)
-            sample-value          {:city          "Killeen"
-                                   :addressline2  nil
-                                   :modifieddate  "2007-08-01"
-                                   :rowguid       "0E6E9E86-A637-4FD5-A945-AC342BFD715B"
-                                   :postalcode    "76541"
-                                   :addressline1  "9500b E. Central Texas Expressway"
-                                   :countryregion "United States"
-                                   :stateprovince "Texas"
-                                   :addressid     603}]
-        (lk/load-with-producer keyfn-schema-channels producer-props)
+(fact "`identity` can be used as keys for tables lacking primary keys"
+      (let [topic-fn     (fn [#:melt.source{:keys [schema name]}]
+                           (str "melt.keyfn." schema "." name))
+            xform-fn     (fn [table] (comp (map #(assoc % ::source/key (get % ::source/value)))
+                                           (map #(assoc % ::source/topic (topic-fn table)))))
+            sources      (map #(assoc % ::source/xform (xform-fn %)) schema)
+            sample-value {:city          "Killeen"
+                          :addressline2  nil
+                          :modifieddate  "2007-08-01"
+                          :rowguid       "0E6E9E86-A637-4FD5-A945-AC342BFD715B"
+                          :postalcode    "76541"
+                          :addressline1  "9500b E. Central Texas Expressway"
+                          :countryregion "United States"
+                          :stateprovince "Texas"
+                          :addressid     603}]
+        (lk/load-with-producer db sources producer-props)
         (let [topic-content (rt/read-topics consumer-props ["melt.keyfn.SalesLT.Address"])]
           (get-in topic-content ["melt.keyfn.SalesLT.Address" sample-value])
           => sample-value)))
