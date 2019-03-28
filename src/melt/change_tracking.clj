@@ -39,11 +39,14 @@
   (let [sql (untrack-table-sql table)]
     (jdbc/execute! db [sql])))
 
+(defn trackable? [table]
+  (seq (::source/keys table)))
+
 (defn trackable-tables
   "List tables that are eligible for change tracking. (Those without
    primary keys are not.)"
   ([] (trackable-tables (mdb/cached-schema)))
-  ([schema] (filter #(seq (::source/keys %)) schema)))
+  ([schema] (filter trackable? schema)))
 
 (defn list-tracked []
   (map (juxt :schema_name :table_name)
