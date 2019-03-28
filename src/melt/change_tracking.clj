@@ -34,6 +34,8 @@
     (jdbc/execute! db [sql])))
 
 (defn trackable-tables
+  "List tables that are eligible for change tracking. (Those without
+   primary keys are not.)"
   ([] (trackable-tables (mdb/cached-schema)))
   ([schema] (filter #(seq (::source/keys %)) schema)))
 
