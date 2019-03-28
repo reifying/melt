@@ -3,7 +3,7 @@
             [melt.jdbc :as mdb]
             [melt.kafka :as k]
             [melt.source :as source])
-  (:import [org.apache.kafka.clients.producer KafkaProducer ProducerRecord]))
+  (:import [org.apache.kafka.clients.producer ProducerRecord]))
 
 (defn default-send-fn [producer]
   (fn [topic k v] (.send producer (ProducerRecord. topic k v))))
