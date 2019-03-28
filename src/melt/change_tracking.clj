@@ -1,9 +1,15 @@
 (ns melt.change-tracking
   (:require [clojure.java.jdbc :as jdbc]
             [clojure.set :refer [difference]]
-            [melt.source :as source]
+            [clojure.spec.alpha :as spec]
+            [clojure.string :refer [join]]
             [melt.config :refer [db]]
-            [melt.jdbc :as mdb]))
+            [melt.jdbc :as mdb]
+            [melt.kafka :as k]
+            [melt.source :as source]
+            [melt.sync :as s])
+  (:import [org.apache.kafka.clients.producer ProducerRecord])
+  (:refer-clojure :exclude [sync]))
 
 (defn- enable-change-tracking-sql [db-name]
   (str "ALTER DATABASE " db-name "
@@ -73,12 +79,73 @@
                 (qualified-table-name table)
                 ", ?) As ct Order By ct.sys_change_version"]))
 
-(defn changes [table change-version]
+(defn change-entity-sql [table]
+  (let [table-name (qualified-table-name table)]
+    (join " "
+          ["Select ct.sys_change_operation, ct.sys_change_version,"
+           "ct.sys_change_creation_version, ct.sys_change_columns,"
+           "ct.sys_change_context, t.*"
+           "From CHANGETABLE(CHANGES" table-name ", ?) As ct"
+           "Left Outer Join " table-name "t On "
+           (join " And "
+                 (map #(str "ct.[" (name %) "] = t.[" (name %) "]")
+                      (::source/keys table)))
+           "Order By ct.sys_change_version"])))
+
+(defn changes [db table change-version]
   (jdbc/query db [(change-sql table) change-version]))
 
-(defn min-change-version [table]
+(defn min-change-version [db table]
   (-> (jdbc/query db ["Select change_tracking_min_valid_version(OBJECT_ID(?)) min_ver"
                       (qualified-table-name table)])
       first
       :min_ver))
 
+(defn current-version [db]
+  (-> (jdbc/query db ["Select change_tracking_current_version() cur_ver"])
+      first
+      :cur_ver))
+
+(defn- send-message [producer message]
+  (let [#::source{:keys [topic key value]}
+        (spec/assert ::source/message message)]
+    (.send producer (ProducerRecord. topic key value))
+    message))
+
+(def tracking-fields [:sys_change_operation
+                      :sys_change_version
+                      :sys_change_creation_version
+                      :sys_change_columns
+                      :sys_change_context])
+
+(defn- relocate-tracking-fields [message]
+  (merge (apply update message ::source/value dissoc tracking-fields)
+         (select-keys (get message ::source/value) tracking-fields)))
+
+(defn- reduce-change-version [_ message]
+  (get message :sys_change_version))
+
+(defn send-changes
+  "Query change tracking, starting at change version `ver`, and send to Kafka.
+   Returns new version"
+  [p-spec db source ver]
+  (k/with-producer [p-spec p-spec]
+    (let [p (k/producer p-spec)
+          s (assoc source ::source/sql-params [(change-entity-sql source) ver])]
+      (transduce (comp (map (partial source/message s))
+                       (map relocate-tracking-fields)
+                       (source/xform s)
+                       (map (partial send-message p)))
+                 (completing reduce-change-version)
+                 ver
+                 (mdb/reducible-source db s))
+      (.flush p))))
+
+(defn sync
+  "Perform full sync and return latest change version"
+  [c-spec p-spec db source]
+  (k/with-producer [p-spec p-spec]
+    (k/with-consumer [c-spec c-spec]
+      (let [ver (current-version db)]
+        (s/sync db c-spec p-spec source)
+        (send-changes p-spec db source ver)))))
