@@ -131,9 +131,6 @@
           (get-in topic-content ["melt.keyfn.SalesLT.Address" sample-value])
           => sample-value)))
 
-(def orig-address
-  (first (jdbc/query db ["Select * From saleslt.address Where addressid = 888"])))
-
 (defn update-table [postalcode]
   (jdbc/update! db "saleslt.address"
                 {:postalcode postalcode}
@@ -145,15 +142,20 @@
 (defn update-table-with-random []
   (update-table (new-zip)))
 
-(fact "`change-tracking/sync` performs full sync and `send-changes` performs incremental sync"
-      (update-table-with-random)
-      (let [version (ct/sync consumer-props producer-props db table)]
-        (v/verify db consumer-props table 0 1) => true
+(try
+  (ct/enable-change-tracking (get table ::source/cat))
+  (ct/track-table table)
+  (catch Exception e (println (.getMessage e))))
+
+(try
+  (fact "`change-tracking/sync` performs full sync and `send-changes` performs incremental sync"
         (update-table-with-random)
-        (ct/send-changes producer-props db table version)
-        (v/verify db consumer-props table 0 1) => true))
+        (let [version (ct/sync consumer-props producer-props db table)]
+          (v/verify db consumer-props table 0 1) => true
+          (update-table-with-random)
+          (ct/send-changes producer-props db table version)
+          (v/verify db consumer-props table 0 1) => true))
 
-;; restore original value
-(update-table (:postalcode orig-address))
-
-(shutdown-agents)
+  (finally
+    (update-table "98626") ; restore original value
+    (shutdown-agents)))
