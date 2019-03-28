@@ -12,8 +12,7 @@
   (:refer-clojure :exclude [sync]))
 
 (defn- enable-change-tracking-sql [db-name]
-  (str "ALTER DATABASE " db-name "
-        SET CHANGE_TRACKING = ON
+  (str "ALTER DATABASE " db-name " SET CHANGE_TRACKING = ON
         (CHANGE_RETENTION = 2 DAYS, AUTO_CLEANUP = ON)"))
 
 (defn enable-change-tracking [db-name]
@@ -23,30 +22,20 @@
   (str (::source/schema table) "." (::source/name table)))
 
 (defn track-table-sql [table]
-  (str "ALTER TABLE " (qualified-table-name table) "
-        ENABLE CHANGE_TRACKING
+  (str "ALTER TABLE " (qualified-table-name table) " ENABLE CHANGE_TRACKING
         WITH (TRACK_COLUMNS_UPDATED = OFF)"))
 
 (defn untrack-table-sql [table]
-  (str "ALTER TABLE " (qualified-table-name table) "
-        DISABLE CHANGE_TRACKING"))
+  (str "ALTER TABLE " (qualified-table-name table) " DISABLE CHANGE_TRACKING"))
 
 (defn track-table [table]
-  (let [sql (track-table-sql table)]
-    (jdbc/execute! db [sql])))
+  (jdbc/execute! db [(track-table-sql table)]))
 
 (defn untrack-table [table]
-  (let [sql (untrack-table-sql table)]
-    (jdbc/execute! db [sql])))
+  (jdbc/execute! db [(untrack-table-sql table)]))
 
 (defn trackable? [table]
   (seq (::source/keys table)))
-
-(defn trackable-tables
-  "List tables that are eligible for change tracking. (Those without
-   primary keys are not.)"
-  ([] (trackable-tables (mdb/cached-schema)))
-  ([schema] (filter trackable? schema)))
 
 (defn list-tracked []
   (map (juxt :schema_name :table_name)
@@ -62,7 +51,7 @@
     (vals (select-keys m (list-tracked)))))
 
 (defn trackable-untracked [schema]
-  (let [trackable (trackable-tables schema)
+  (let [trackable (filter trackable? schema)
         tracked   (tracked schema)]
     (difference (set trackable) (set tracked))))
 
