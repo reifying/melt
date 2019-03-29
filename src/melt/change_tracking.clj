@@ -122,15 +122,16 @@
   [p-spec db source ver]
   (k/with-producer [p-spec p-spec]
     (let [p (k/producer p-spec)
-          s (assoc source ::source/sql-params [(change-entity-sql source) ver])]
-      (transduce (comp (map (partial source/message s))
-                       (map relocate-tracking-fields)
-                       (source/xform s)
-                       (map (partial send-message p)))
-                 (completing reduce-change-version)
-                 ver
-                 (mdb/reducible-source db s))
-      (.flush p))))
+          s (assoc source ::source/sql-params [(change-entity-sql source) ver])
+          v (transduce (comp (map (partial source/message s))
+                             (map relocate-tracking-fields)
+                             (source/xform s)
+                             (map (partial send-message p)))
+                       (completing reduce-change-version)
+                       ver
+                       (mdb/reducible-source db s))]
+      (.flush p)
+      v)))
 
 (defn sync
   "Perform full sync and return latest change version"
