@@ -155,8 +155,8 @@
   (update-table (new-zip)))
 
 (try
-  (ct/enable-change-tracking (get table ::source/cat))
-  (ct/track-table table)
+  (ct/enable-change-tracking db (get table ::source/cat))
+  (ct/track-table db table)
   (catch Exception e (println (.getMessage e))))
 
 (try
