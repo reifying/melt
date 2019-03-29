@@ -2,7 +2,6 @@
   (:require [clojure.java.jdbc :as jdbc]
             [melt.source :as source]
             [melt.change-tracking :as ct]
-            [melt.config :refer [db]]
             [melt.diff :as d]
             [melt.jdbc :as mdb]
             [melt.load-kafka :as lk]
@@ -13,6 +12,19 @@
 
 ;; Tests are dependent on each other. order matters and predecessor tests failing
 ;; will likely cause successors to fail.
+
+(def host   (System/getenv "MELT_DB_HOST"))
+(def port   (or (System/getenv "MELT_DB_PORT") "1433"))
+(def user   (System/getenv "MELT_DB_USER"))
+(def pass   (System/getenv "MELT_DB_PASS"))
+(def dbname (System/getenv "MELT_DB_NAME"))
+
+(def db {:dbtype   "jtds"
+         :dbname   dbname
+         :host     host
+         :port     port
+         :user     user
+         :password pass})
 
 (def bootstrap-servers
   (str (or (System/getenv "MELT_KAFKA_HOST") "localhost") ":9092"))
@@ -39,7 +51,7 @@
   (doto consumer-props
     (.put "group.id" "melt.integration-test.sync")))
 
-(def schema (mdb/schema))
+(def schema (mdb/schema db))
 
 (defn topic [source]
   (str "melt." (::source/schema source) "." (::source/name source)))

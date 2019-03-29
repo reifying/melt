@@ -1,10 +1,9 @@
 (ns melt.load-kafka-test
   (:require [melt.source :as source]
-            [melt.config :refer [db]]
+            [melt.common :refer [db]]
             [melt.jdbc :as mdb]
             [melt.load-kafka :as lk]
             [melt.serial :as serial]
-            [melt.source :as source]
             [midje.sweet :refer [fact =>]])
   (:import [org.apache.kafka.clients.producer MockProducer]))
 
@@ -25,7 +24,7 @@
   (map #(assoc % ::source/topic (topic source))))
 
 (defn sources []
-  (map #(assoc % ::source/xform (assoc-topic-xform %)) (mdb/schema)))
+  (map #(assoc % ::source/xform (assoc-topic-xform %)) (mdb/schema db)))
 
 (fact "`load-with-sender` reads tables and sends records to Kafka"
       (let [topic-counts (atom (sorted-map))]

@@ -3,7 +3,6 @@
             [clojure.set :refer [difference]]
             [clojure.spec.alpha :as spec]
             [clojure.string :refer [join]]
-            [melt.config :refer [db]]
             [melt.jdbc :as mdb]
             [melt.kafka :as k]
             [melt.source :as source]
@@ -15,7 +14,7 @@
   (str "ALTER DATABASE " db-name " SET CHANGE_TRACKING = ON
         (CHANGE_RETENTION = 2 DAYS, AUTO_CLEANUP = ON)"))
 
-(defn enable-change-tracking [db-name]
+(defn enable-change-tracking [db db-name]
   (jdbc/execute! db [(enable-change-tracking-sql db-name)]))
 
 (defn qualified-table-name [table]
@@ -28,41 +27,41 @@
 (defn untrack-table-sql [table]
   (str "ALTER TABLE " (qualified-table-name table) " DISABLE CHANGE_TRACKING"))
 
-(defn track-table [table]
+(defn track-table [db table]
   (jdbc/execute! db [(track-table-sql table)]))
 
-(defn untrack-table [table]
+(defn untrack-table [db table]
   (jdbc/execute! db [(untrack-table-sql table)]))
 
 (defn trackable? [table]
   (seq (::source/keys table)))
 
-(defn list-tracked []
+(defn list-tracked [db]
   (map (juxt :schema_name :table_name)
        (jdbc/query db
                    ["Select object_schema_name(object_id) schema_name, 
                             object_name(object_id) table_name 
                      From sys.change_tracking_tables"])))
 
-(defn tracked [schema]
+(defn tracked [db schema]
   (let [m (reduce #(assoc %1 ((juxt ::source/schema ::source/name) %2) %2)
                   {}
                   schema)]
-    (vals (select-keys m (list-tracked)))))
+    (vals (select-keys m (list-tracked db)))))
 
-(defn trackable-untracked [schema]
+(defn trackable-untracked [db schema]
   (let [trackable (filter trackable? schema)
-        tracked   (tracked schema)]
+        tracked   (tracked db schema)]
     (difference (set trackable) (set tracked))))
 
-(defn track-all [schema]
-  (doall (map track-table (trackable-untracked schema))))
+(defn track-all [db schema]
+  (doall (map track-table (trackable-untracked db schema))))
 
 (defn print-track-all [schema]
   (doall (map #(do (println (track-table-sql %)) (println "GO")) (trackable-untracked schema))))
 
-(defn untrack-all [schema]
-  (doseq [table (tracked schema)] (untrack-table table)))
+(defn untrack-all [db schema]
+  (doseq [table (tracked db schema)] (untrack-table db table)))
 
 (defn change-sql [table]
   (String/join " "

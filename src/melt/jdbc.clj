@@ -3,8 +3,7 @@
             [clojure.java.io :as io]
             [clojure.java.jdbc :as jdbc]
             [clojure.pprint :refer [pprint]]
-            [clojure.spec.alpha :as s]
-            [melt.config :refer [db ignorable-schemas schema-file-path
+            [melt.config :refer [ignorable-schemas schema-file-path
                                  abort-on-schema-change]]
             [melt.source :as source]
             [melt.util :refer [mkdirs]]))
@@ -23,13 +22,13 @@
              [(table column-map) ::source/columns]
              (fn [columns] (conj columns (:column_name column-map)))))
 
-(defn- primary-keys [table]
+(defn- primary-keys [db table]
   (jdbc/with-db-metadata [md db]
     (->> (.getPrimaryKeys md (::source/cat table) (::source/schema table) (::source/name table))
          jdbc/metadata-query
          (map (comp keyword clojure.string/lower-case :column_name)))))
 
-(defn- table-set []
+(defn- table-set [db]
   (set (jdbc/with-db-metadata [md db]
          (->> (.getTables md nil nil nil (into-array String ["TABLE"]))
               jdbc/metadata-query
@@ -39,8 +38,8 @@
 (defn- contains-table? [table-set column-map]
   (contains? table-set (table column-map)))
 
-(defn schema []
-  (let [table-set (table-set)
+(defn schema [db]
+  (let [table-set (table-set db)
         id        (fn [t] (clojure.string/join
                            "." ((juxt ::source/cat ::source/schema ::source/name) t)))]
     (jdbc/with-db-metadata [md db]
@@ -49,7 +48,7 @@
            (filter (partial contains-table? table-set))
            (reduce group-by-table {})
            (map #(apply merge %))
-           (map #(assoc % ::source/keys (primary-keys %)))
+           (map #(assoc % ::source/keys (primary-keys db %)))
            (apply sorted-set-by #(compare (id %1) (id %2)))))))
 
 (defn cached-schema-file []
@@ -65,12 +64,11 @@
 (def cached-schema (memoize schema))
 
 (defn save-schema
-  ([] (save-schema (schema)))
   ([coll] (spit (cached-schema-file) (with-out-str (pprint coll)))))
 
-(defn schema-diff []
+(defn schema-diff [db]
   (let [cached (cached-schema)
-        latest (schema)
+        latest (schema db)
         diff   (data/diff cached latest)]
     {:only-old   (first diff)
      :only-new   (second diff)
@@ -79,8 +77,8 @@
 (defn schema-changed? [diff]
   (some some? (vals (select-keys diff [:only-new :only-old]))))
 
-(defn schema-check []
-  (let [diff (schema-diff)]
+(defn schema-check [db]
+  (let [diff (schema-diff db)]
     (if (and (schema-changed? diff)
              (= "TRUE" abort-on-schema-change))
       false

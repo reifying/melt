@@ -3,7 +3,6 @@
             [clojure.java.jdbc :as jdbc]
             [clojure.pprint :refer [pprint]]
             [melt.source :as source]
-            [melt.config :refer [db]]
             [melt.jdbc :as mdb]
             [melt.util :refer [mkdirs conform-or-throw]])
   (:import [java.io File]))
@@ -14,7 +13,7 @@
 (defn sample-writer [dir-name table]
   (io/writer (sample-file-name dir-name table)))
 
-(defn sample-db [schema dir-name]
+(defn sample-db [db schema dir-name]
   (println "Writing sample to" dir-name)
   (mkdirs dir-name)
   (doseq [table schema]
@@ -28,8 +27,5 @@
           (pprint (jdbc/query db [sample-sql])))))))
 
 (defn write-sample
-  ([sources] (write-sample sources "target/data-samples"))
-  ([sources dir-name] (sample-db sources dir-name)))
-
-(defn -main []
-  (write-sample (mdb/schema)))
+  ([db sources] (write-sample db sources "target/data-samples"))
+  ([db sources dir-name] (sample-db db sources dir-name)))
