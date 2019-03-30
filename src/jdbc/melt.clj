@@ -5,6 +5,7 @@
             [clojure.java.jdbc :as jdbc]
             [clojure.pprint :refer [pprint]]
             [clojure.spec.alpha :as spec]
+            [clojure.string :refer [lower-case]]
             [jdbc.melt.util :refer [mkdirs conform-or-throw format-date-time]])
   (:import java.io.File
            [org.apache.kafka.clients.consumer Consumer KafkaConsumer ConsumerRecord]
@@ -41,17 +42,21 @@
    ::cat    table_cat
    ::schema table_schem})
 
+(def column->keyword (comp keyword lower-case :column_name))
+
 (defn- group-by-table
   [table-map column-map]
   (update-in table-map
              [(table column-map) ::columns]
-             (fn [columns] (conj columns (:column_name column-map)))))
+             (fn [columns] 
+               (conj (or columns #{}) (column->keyword column-map)))))
 
 (defn- primary-keys [db table]
   (jdbc/with-db-metadata [md db]
     (->> (.getPrimaryKeys md (::cat table) (::schema table) (::name table))
          jdbc/metadata-query
-         (map (comp keyword clojure.string/lower-case :column_name)))))
+         (map column->keyword)
+         set)))
 
 (defn- table-set [db]
   (set (jdbc/with-db-metadata [md db]

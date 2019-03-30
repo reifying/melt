@@ -9,29 +9,13 @@
       #::melt{:name    "SalesOrderHeader"
               :cat     "AdventureWorks"
               :schema  "SalesLT"
-              :columns ["ModifiedDate"
-                        "rowguid"
-                        "Comment"
-                        "TotalDue"
-                        "Freight"
-                        "TaxAmt"
-                        "SubTotal"
-                        "CreditCardApprovalCode"
-                        "ShipMethod"
-                        "BillToAddressID"
-                        "ShipToAddressID"
-                        "CustomerID"
-                        "AccountNumber"
-                        "PurchaseOrderNumber"
-                        "SalesOrderNumber"
-                        "OnlineOrderFlag"
-                        "Status"
-                        "ShipDate"
-                        "DueDate"
-                        "OrderDate"
-                        "RevisionNumber"
-                        "SalesOrderID"]
-              :keys    [:salesorderid]})
+              :columns #{:modifieddate :rowguid :comment :totaldue :freight 
+                         :taxamt :subtotal :creditcardapprovalcode :shipmethod
+                         :billtoaddressid :shiptoaddressid :customerid 
+                         :accountnumber :purchaseordernumber :salesordernumber 
+                         :onlineorderflag :status :shipdate :duedate :orderdate 
+                         :revisionnumber :salesorderid}
+              :keys    #{:salesorderid}})
 
 (defn count-send-fn [counts-atom]
   (fn [topic k v]

@@ -1,6 +1,6 @@
 (ns jdbc.melt.sql-server
   (:require [clojure.java.jdbc :as jdbc]
-            [clojure.set :refer [difference]]
+            [clojure.set :refer [difference union]]
             [clojure.spec.alpha :as spec]
             [clojure.string :refer [join]]
             [jdbc.melt :as melt])
@@ -66,12 +66,25 @@
                 (qualified-table-name table)
                 ", ?) As ct Order By ct.sys_change_version"]))
 
+(def tracking-fields #{:sys_change_operation
+                       :sys_change_version
+                       :sys_change_creation_version
+                       :sys_change_columns
+                       :sys_change_context})
+
+(defn- select-fields [table]
+  (join ", "
+        (flatten
+         [(map #(str "ct." (name %))
+               (union tracking-fields (::melt/keys table)))
+          (map #(str "t." (name %))
+               (difference (::melt/columns table) (::melt/keys table)))])))
+
 (defn change-entity-sql [table]
   (let [table-name (qualified-table-name table)]
     (join " "
-          ["Select ct.sys_change_operation, ct.sys_change_version,"
-           "ct.sys_change_creation_version, ct.sys_change_columns,"
-           "ct.sys_change_context, t.*"
+          ["Select"
+           (select-fields table)
            "From CHANGETABLE(CHANGES" table-name ", ?) As ct"
            "Left Outer Join " table-name "t On "
            (join " And "
@@ -99,15 +112,14 @@
     (.send producer (ProducerRecord. topic key value))
     message))
 
-(def tracking-fields [:sys_change_operation
-                      :sys_change_version
-                      :sys_change_creation_version
-                      :sys_change_columns
-                      :sys_change_context])
-
 (defn- relocate-tracking-fields [message]
   (merge (apply update message ::melt/value dissoc tracking-fields)
          (select-keys (get message ::melt/value) tracking-fields)))
+
+(defn- tombstone [message]
+  (if (= "D" (:sys_change_operation message))
+    (assoc message ::melt/value nil)
+    message))
 
 (defn- reduce-change-version [_ message]
   (get message :sys_change_version))
@@ -121,6 +133,7 @@
           s (assoc source ::melt/sql-params [(change-entity-sql source) ver])
           v (transduce (comp (map (partial melt/message s))
                              (map relocate-tracking-fields)
+                             (map tombstone)
                              (melt/xform s)
                              (map (partial send-message p)))
                        (completing reduce-change-version)

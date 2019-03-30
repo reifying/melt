@@ -156,11 +156,26 @@
 (try
   (fact "`sql-server/sync-kafka` performs full sync and `send-changes` performs incremental sync"
         (update-table-with-random)
-        (let [version (s/sync-kafka consumer-props producer-props db table)]
+        (let [v1 (s/sync-kafka consumer-props producer-props db table)]
           (melt/verify db consumer-props table 0 1) => true
           (update-table-with-random)
-          (s/send-changes producer-props db table version)
-          (melt/verify db consumer-props table 0 1) => true))
+          (let [v2 (s/send-changes producer-props db table v1)]
+            (melt/verify db consumer-props table 0 1) => true
+            (let [inserted (:id (first (jdbc/insert! db
+                                                     "saleslt.address"
+                                                     {:countryregion "United States"
+                                                      :city          "Melt"
+                                                      :addressline1  "Three Rivers Mall"
+                                                      :addressline2  nil
+                                                      :postalcode    "98626"
+                                                      :stateprovince "Washington"})))
+                  v3       (s/send-changes producer-props db table v2)]
+              (try
+                (melt/verify db consumer-props table 0 1) => true
+                (jdbc/delete! db "saleslt.address" ["addressid = ?" inserted])
+                (s/send-changes producer-props db table v3)
+                (melt/verify db consumer-props table 0 1) => true
+                (finally (jdbc/delete! db "saleslt.address" ["addressid = ?" inserted])))))))
 
   (finally
     (update-table "98626") ; restore original value
