@@ -2,4 +2,4 @@
 
 set -e
 
-clojure -e "(compile 'melt.serial)"
+clojure -e "(compile 'jdbc.melt.serdes)"

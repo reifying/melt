@@ -1,11 +1,37 @@
-(ns melt.load-kafka-test
-  (:require [melt.source :as source]
-            [melt.common :refer [db]]
-            [melt.jdbc :as mdb]
-            [melt.load-kafka :as lk]
-            [melt.serial :as serial]
-            [midje.sweet :refer [fact =>]])
+(ns jdbc.melt-test
+  (:require [midje.sweet :refer [fact =>]]
+            [jdbc.melt.common :refer [db]]
+            [jdbc.melt :as melt])
   (:import [org.apache.kafka.clients.producer MockProducer]))
+
+(fact "`schema` reads a minimal amount of info describing the DB schema"
+      (first (filter #(= "SalesOrderHeader" (::melt/name %)) (melt/schema db))) =>
+      #::melt{:name    "SalesOrderHeader"
+              :cat     "AdventureWorks"
+              :schema  "SalesLT"
+              :columns ["ModifiedDate"
+                        "rowguid"
+                        "Comment"
+                        "TotalDue"
+                        "Freight"
+                        "TaxAmt"
+                        "SubTotal"
+                        "CreditCardApprovalCode"
+                        "ShipMethod"
+                        "BillToAddressID"
+                        "ShipToAddressID"
+                        "CustomerID"
+                        "AccountNumber"
+                        "PurchaseOrderNumber"
+                        "SalesOrderNumber"
+                        "OnlineOrderFlag"
+                        "Status"
+                        "ShipDate"
+                        "DueDate"
+                        "OrderDate"
+                        "RevisionNumber"
+                        "SalesOrderID"]
+              :keys    [:salesorderid]})
 
 (defn count-send-fn [counts-atom]
   (fn [topic k v]
@@ -14,21 +40,21 @@
 (defn assoc-send-fn [records-atom]
   (fn [_ k v] (swap! records-atom
                      (fn [m] (assoc m
-                                    (serial/lossy-identity k)
-                                    (serial/lossy-identity v))))))
+                                    (melt/lossy-identity k)
+                                    (melt/lossy-identity v))))))
 
 (defn topic [source]
-  (str "melt." (::source/schema source) "." (::source/name source)))
+  (str "melt." (::melt/schema source) "." (::melt/name source)))
 
 (defn assoc-topic-xform [source]
-  (map #(assoc % ::source/topic (topic source))))
+  (map #(assoc % ::melt/topic (topic source))))
 
 (defn sources []
-  (map #(assoc % ::source/xform (assoc-topic-xform %)) (mdb/schema db)))
+  (map #(assoc % ::melt/xform (assoc-topic-xform %)) (melt/schema db)))
 
 (fact "`load-with-sender` reads tables and sends records to Kafka"
       (let [topic-counts (atom (sorted-map))]
-        (lk/load-with-sender db (sources) (count-send-fn topic-counts))
+        (melt/load-with-sender db (sources) (count-send-fn topic-counts))
         @topic-counts
         =>
         {"melt.SalesLT.Address"                        450
@@ -46,10 +72,10 @@
 (fact "`load-with-sender` reads queries and sends records to Kafka"
       (let [records   (atom {})
             sender-fn (assoc-send-fn records)
-            source    #::source{:sql "Select * From SalesLT.Address Where addressid In (9, 11)"
-                                :keys  [:addressid]
-                                :xform (map #(assoc % ::source/topic "melt.topic"))}]
-        (lk/load-with-sender db [source] sender-fn)
+            source    #::melt{:sql "Select * From SalesLT.Address Where addressid In (9, 11)"
+                              :keys  [:addressid]
+                              :xform (map #(assoc % ::melt/topic "melt.topic"))}]
+        (melt/load-with-sender db [source] sender-fn)
         @records
         =>
         {{:addressid 9}  {:addressid     9
@@ -74,16 +100,16 @@
 (fact "`load-with-sender` supports arbitrary transformations"
       (let [records   (atom {})
             sender-fn (assoc-send-fn records)
-            xform-fn  (fn [m] (update m ::source/value
+            xform-fn  (fn [m] (update m ::melt/value
                                       #(reduce-kv
                                         (fn [m k v]
                                           (assoc m k (if (= k :addressid) v 1)))
                                         {} %)))
-            source   #::source{:sql         "Select * From SalesLT.Address Where addressid In (9, 11)"
-                            ::source/keys        [:addressid]
-                            ::source/xform (comp (map xform-fn)
-                                                 (map #(assoc % ::source/topic "melt.topic")))}]
-        (lk/load-with-sender db [source] sender-fn)
+            source   #::melt{:sql         "Select * From SalesLT.Address Where addressid In (9, 11)"
+                             :keys        [:addressid]
+                             :xform (comp (map xform-fn)
+                                          (map #(assoc % ::melt/topic "melt.topic")))}]
+        (melt/load-with-sender db [source] sender-fn)
         @records
         =>
         {{:addressid 9}  {:addressid     9

@@ -6,11 +6,11 @@
  :aliases {:integration {:extra-paths ["integration"]
                          :extra-deps  {midje                   {:mvn/version "1.9.6"}
                                        org.clojure/tools.trace {:mvn/version "0.7.10"}}
-                         :main-opts   ["-m" "melt.test-runner"]
+                         :main-opts   ["-m" "jdbc.melt.test-runner"]
                          :jvm-opts    ["-XX:-OmitStackTraceInFastThrow"]}
            :test        {:extra-paths ["test"]
                          :extra-deps  {midje {:mvn/version "1.9.6"}}
-                         :main-opts   ["-m" "melt.test-runner"]}
+                         :main-opts   ["-m" "jdbc.melt.test-runner"]}
            :midje       {:extra-paths ["test"]
                          :extra-deps  {midje {:mvn/version "1.9.6"}}}
            :outdated    {:extra-deps {olical/depot {:mvn/version "1.8.1"}}

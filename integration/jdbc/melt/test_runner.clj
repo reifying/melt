@@ -1,4 +1,4 @@
-(ns melt.test-runner
+(ns jdbc.melt.test-runner
   (:require [clojure.spec.alpha :as s]
             [midje.repl :refer [load-facts]]))
 
@@ -6,6 +6,6 @@
   "Return non-zero exit code if a test failure is found"
   []
   (s/check-asserts true)
-  (let [results (load-facts)]
+  (let [results (load-facts 'jdbc.melt.integration-test)]
     (if (< 0 (:failures results))
       (System/exit 1))))

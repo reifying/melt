@@ -1,4 +1,4 @@
-(ns melt.common)
+(ns jdbc.melt.common)
 
 (def host   (System/getenv "MELT_DB_HOST"))
 (def port   (or (System/getenv "MELT_DB_PORT") "1433"))

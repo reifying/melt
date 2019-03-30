@@ -34,30 +34,6 @@ The primary focus is change data replication where log compaction can be run
 frequently (i.e. daily) to avoid long topic load times.
 
 
-## How to use it
-1. Set required environment variables:
-   * MELT_DB_HOST
-   * MELT_DB_USER
-   * MELT_DB_PASS
-   * MELT_DB_NAME
-
-2. Save current schema to a file
-   (optional step for future comparison when schema changes)
-    ```
-    clj -i src/melt/analyze.clj  -e "(melt.analyze/save-schema)"
-    ```
-
-3. Take a row-count and sample of the data from all user tables
-    ```
-    clj -m melt.analyze
-    ```
-
-4. Create topics for each table
-   ```
-   # List topic names
-   clj -i src/melt/analyze.clj  -e "(melt.analyze/topic-names)"
-   ```
-
 ## Plan Transformations
 1. Read schema from db
 2. Compare schema to local cache

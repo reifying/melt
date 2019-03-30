@@ -1,14 +1,10 @@
-(ns melt.change-tracking
+(ns jdbc.melt.sql-server
   (:require [clojure.java.jdbc :as jdbc]
             [clojure.set :refer [difference]]
             [clojure.spec.alpha :as spec]
             [clojure.string :refer [join]]
-            [melt.jdbc :as mdb]
-            [melt.kafka :as k]
-            [melt.source :as source]
-            [melt.sync :as s])
-  (:import [org.apache.kafka.clients.producer ProducerRecord])
-  (:refer-clojure :exclude [sync]))
+            [jdbc.melt :as melt])
+  (:import [org.apache.kafka.clients.producer ProducerRecord]))
 
 (defn- enable-change-tracking-sql [db-name]
   (str "ALTER DATABASE " db-name " SET CHANGE_TRACKING = ON
@@ -18,7 +14,7 @@
   (jdbc/execute! db [(enable-change-tracking-sql db-name)]))
 
 (defn qualified-table-name [table]
-  (str (::source/schema table) "." (::source/name table)))
+  (str (::melt/schema table) "." (::melt/name table)))
 
 (defn track-table-sql [table]
   (str "ALTER TABLE " (qualified-table-name table) " ENABLE CHANGE_TRACKING
@@ -34,7 +30,7 @@
   (jdbc/execute! db [(untrack-table-sql table)]))
 
 (defn trackable? [table]
-  (seq (::source/keys table)))
+  (seq (::melt/keys table)))
 
 (defn list-tracked [db]
   (map (juxt :schema_name :table_name)
@@ -44,7 +40,7 @@
                      From sys.change_tracking_tables"])))
 
 (defn tracked [db schema]
-  (let [m (reduce #(assoc %1 ((juxt ::source/schema ::source/name) %2) %2)
+  (let [m (reduce #(assoc %1 ((juxt ::melt/schema ::melt/name) %2) %2)
                   {}
                   schema)]
     (vals (select-keys m (list-tracked db)))))
@@ -80,7 +76,7 @@
            "Left Outer Join " table-name "t On "
            (join " And "
                  (map #(str "ct.[" (name %) "] = t.[" (name %) "]")
-                      (::source/keys table)))
+                      (::melt/keys table)))
            "Order By ct.sys_change_version"])))
 
 (defn changes [db table change-version]
@@ -98,8 +94,8 @@
       :cur_ver))
 
 (defn- send-message [producer message]
-  (let [#::source{:keys [topic key value]}
-        (spec/assert ::source/message message)]
+  (let [#::melt{:keys [topic key value]}
+        (spec/assert ::melt/message message)]
     (.send producer (ProducerRecord. topic key value))
     message))
 
@@ -110,8 +106,8 @@
                       :sys_change_context])
 
 (defn- relocate-tracking-fields [message]
-  (merge (apply update message ::source/value dissoc tracking-fields)
-         (select-keys (get message ::source/value) tracking-fields)))
+  (merge (apply update message ::melt/value dissoc tracking-fields)
+         (select-keys (get message ::melt/value) tracking-fields)))
 
 (defn- reduce-change-version [_ message]
   (get message :sys_change_version))
@@ -120,24 +116,24 @@
   "Query change tracking, starting at change version `ver`, and send to Kafka.
    Returns new version"
   [p-spec db source ver]
-  (k/with-producer [p-spec p-spec]
-    (let [p (k/producer p-spec)
-          s (assoc source ::source/sql-params [(change-entity-sql source) ver])
-          v (transduce (comp (map (partial source/message s))
+  (melt/with-producer [p-spec p-spec]
+    (let [p (melt/producer p-spec)
+          s (assoc source ::melt/sql-params [(change-entity-sql source) ver])
+          v (transduce (comp (map (partial melt/message s))
                              (map relocate-tracking-fields)
-                             (source/xform s)
+                             (melt/xform s)
                              (map (partial send-message p)))
                        (completing reduce-change-version)
                        ver
-                       (mdb/reducible-source db s))]
+                       (melt/reducible-source db s))]
       (.flush p)
       v)))
 
-(defn sync
+(defn sync-kafka
   "Perform full sync and return latest change version"
   [c-spec p-spec db source]
-  (k/with-producer [p-spec p-spec]
-    (k/with-consumer [c-spec c-spec]
+  (melt/with-producer [p-spec p-spec]
+    (melt/with-consumer [c-spec c-spec]
       (let [ver (current-version db)]
-        (s/sync db c-spec p-spec source)
+        (melt/sync-kafka db c-spec p-spec source)
         (send-changes p-spec db source ver)))))

@@ -1,4 +1,4 @@
-(ns melt.util
+(ns jdbc.melt.util
   (:require [clj-time.coerce :as c]
             [clj-time.format :as f]
             [clojure.spec.alpha :as s])
