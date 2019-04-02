@@ -122,9 +122,6 @@
     (assoc message ::melt/value nil)
     message))
 
-(defn- reduce-change-version [_ message]
-  (get message :sys_change_version))
-
 (defn send-changes
   "Query change tracking, starting at change version `ver`, and send to Kafka.
    Returns new version"
@@ -132,14 +129,14 @@
   (melt/with-producer [p-spec p-spec]
     (let [p (melt/producer p-spec)
           s (assoc source ::melt/sql-params [(change-entity-sql source) ver])
-          v (transduce (comp (map (partial melt/message s))
-                             (map relocate-tracking-fields)
-                             (map tombstone)
-                             (melt/xform s)
-                             (map (partial send-message p)))
-                       (completing reduce-change-version)
-                       ver
-                       (melt/reducible-source db s))]
+          v (get (last (eduction (map (partial melt/message s))
+                                 (map relocate-tracking-fields)
+                                 (map tombstone)
+                                 (melt/xform s)
+                                 (map (partial send-message p))
+                                 (melt/query-source db s)))
+                 :sys_change_version
+                 ver)]
       (.flush p)
       v)))
 
