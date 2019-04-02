@@ -67,7 +67,7 @@
                           :addressline2  nil
                           :city          "Bothell"
                           :countryregion "United States"
-                          :modifieddate  "2006-07-01"
+                          :modifieddate  "2006-07-01T00:00:00Z"
                           :postalcode    "98011"
                           :rowguid       "268AF621-76D7-4C78-9441-144FD139821A"
                           :stateprovince "Washington"}
@@ -76,7 +76,7 @@
                           :addressline2  nil
                           :city          "Bothell"
                           :countryregion "United States"
-                          :modifieddate  "2007-04-01"
+                          :modifieddate  "2007-04-01T00:00:00Z"
                           :postalcode    "98011"
                           :rowguid       "981B3303-ACA2-49C7-9A96-FB670785B269"
                           :stateprovince "Washington"}}))

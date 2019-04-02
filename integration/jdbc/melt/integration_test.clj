@@ -65,7 +65,7 @@
         =>
         {:city          "Killeen"
          :addressline2  nil
-         :modifieddate  "2007-08-01"
+         :modifieddate  "2007-08-01T00:00:00Z"
          :rowguid       "0E6E9E86-A637-4FD5-A945-AC342BFD715B"
          :postalcode    "76541"
          :addressline1  "9500b E. Central Texas Expressway"
@@ -125,7 +125,7 @@
             sources      (map #(assoc % ::melt/xform (xform-fn %)) schema)
             sample-value {:city          "Killeen"
                           :addressline2  nil
-                          :modifieddate  "2007-08-01"
+                          :modifieddate  "2007-08-01T00:00:00Z"
                           :rowguid       "0E6E9E86-A637-4FD5-A945-AC342BFD715B"
                           :postalcode    "76541"
                           :addressline1  "9500b E. Central Texas Expressway"

@@ -1,6 +1,7 @@
 (ns jdbc.melt
   (:require [clojure.data :as data]
-            [clojure.data.json :as json]
+            [cheshire.core :as json]
+            [cheshire.generate :as gen]
             [clojure.java.io :as io]
             [clojure.java.jdbc :as jdbc]
             [clojure.pprint :refer [pprint]]
@@ -336,18 +337,21 @@
     (into (sorted-map) x)
     x))
 
+(gen/add-encoder java.sql.Blob
+                 (fn [v jsonGenerator]
+                   (.writeBinary jsonGenerator (.getBytes v 1 (.length v)))))
+
+(gen/add-encoder java.sql.Clob
+                 (fn [v jsonGenerator]
+                   (.writeString jsonGenerator (.getSubString v 1 (.length v)))))
+
 (defn write-str [x]
-  (letfn [(json-value-fn [k v]
-            (cond (instance? java.sql.Timestamp v) (format-date-time k v)
-                  (instance? java.sql.Blob v) (.getBytes v 1 (.length v))
-                  (instance? java.sql.Clob v) (.getSubString v 1 (.length v))
-                  :else v))]
-    (json/write-str x :value-fn json-value-fn)))
+    (json/generate-string x))
 
 (def write-key (comp write-str ensure-sorted))
 
 (defn read-str [s]
-  (json/read-str s :key-fn keyword))
+  (json/parse-string s true))
 
 (def lossy-identity (comp read-str write-str))
 
