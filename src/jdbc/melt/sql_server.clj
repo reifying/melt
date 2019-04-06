@@ -30,7 +30,7 @@
   (jdbc/execute! db [(untrack-table-sql table)]))
 
 (defn trackable? [table]
-  (seq (::melt/keys table)))
+  (boolean (seq (::melt/keys table))))
 
 (defn list-tracked [db]
   (map (juxt :schema_name :table_name)
