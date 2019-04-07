@@ -74,12 +74,13 @@
                        :sys_change_context})
 
 (defn- select-fields [table]
-  (join ", "
-        (flatten
-         [(map #(str "ct." (name %))
-               (union tracking-fields (::melt/keys table)))
-          (map #(str "t." (name %))
-               (difference (::melt/columns table) (::melt/keys table)))])))
+  (let [ks (set (::melt/keys table))]
+    (join ", "
+          (flatten
+           [(map #(str "ct." (name %))
+                 (union tracking-fields ks))
+            (map #(str "t." (name %))
+                 (difference (::melt/columns table) ks))]))))
 
 (defn change-entity-sql [table]
   (let [table-name (qualified-table-name table)]
