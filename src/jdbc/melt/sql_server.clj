@@ -80,7 +80,7 @@
            [(map #(str "ct." (name %))
                  (union tracking-fields ks))
             (map #(str "t." (name %))
-                 (difference (::melt/columns table) ks))]))))
+                 (difference (set (::melt/columns table)) ks))]))))
 
 (defn change-entity-sql [table]
   (let [table-name (qualified-table-name table)]
