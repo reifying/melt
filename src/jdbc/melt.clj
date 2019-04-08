@@ -356,7 +356,8 @@
 (def lossy-identity (comp read-str write-str))
 
 (defn fuzz [table-map]
-  (reduce-kv (fn [m k v] (assoc m k (lossy-identity v))) {} table-map))
+  (reduce-kv (fn [m k v] (assoc m (lossy-identity k) (lossy-identity v)))
+             {} table-map))
 
 (defn merge-by-key [acc message]
   (let [m (spec/assert ::message message)]
@@ -492,7 +493,7 @@
               topic-data (->> source-map
                               topics
                               (refresh c prev-topic-data))
-              topic-map  (:data (merge-topic-key topic-data))
+              topic-map (merge-topic-key (:data topic-data))
               diff       (diff source-map topic-map)
               matches    (diff-matches? diff)]
           (cond (or matches post-sync-try) matches

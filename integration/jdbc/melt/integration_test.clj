@@ -131,27 +131,32 @@
         (jdbc/delete! t-con "SalesLT.CustomerAddress" ["addressid = ?" 888]) => [1]
         (jdbc/delete! t-con "saleslt.address" ["addressid = ?" 888]) => [1]
         (melt/verify t-con consumer-props table 0 1) => false
-        (melt/verify-sync t-con consumer-props producer-props table 0 1) = true))
+        (melt/verify-sync t-con consumer-props producer-props table 0 1) => true))
 
-(fact "`identity` can be used as keys for tables lacking primary keys"
-      (let [topic-fn     (fn [#::melt{:keys [schema name]}]
-                           (str "melt.altkey." schema "." name))
-            xform-fn     (fn [table] (comp (map #(assoc % ::melt/key (get % ::melt/value)))
-                                           (map #(assoc % ::melt/topic (topic-fn table)))))
-            sources      (map #(assoc % ::melt/xform (xform-fn %)) schema)
-            sample-value {:city          "Killeen"
-                          :addressline2  nil
-                          :modifieddate  "2007-08-01T00:00:00Z"
-                          :rowguid       "0E6E9E86-A637-4FD5-A945-AC342BFD715B"
-                          :postalcode    "76541"
-                          :addressline1  "9500b E. Central Texas Expressway"
-                          :countryregion "United States"
-                          :stateprovince "Texas"
-                          :addressid     603}]
-        (melt/load-with-producer db sources producer-props)
-        (let [topic-content (melt/read-topics consumer-props ["melt.altkey.SalesLT.Address"])]
-          (get-in topic-content ["melt.altkey.SalesLT.Address" sample-value])
-          => sample-value)))
+(facts "values can be used as keys for tables lacking primary keys"
+       (let [topic-fn     (fn [#::melt{:keys [schema name]}]
+                            (str "melt.altkey." schema "." name))
+             xform-fn     (fn [table] (comp (map #(assoc % ::melt/key (get % ::melt/value)))
+                                            (map #(assoc % ::melt/topic (topic-fn table)))))
+             sources      (map #(assoc % ::melt/xform (xform-fn %)) schema)
+             sample-value {:city          "Killeen"
+                           :addressline2  nil
+                           :modifieddate  "2007-08-01T00:00:00Z"
+                           :rowguid       "0E6E9E86-A637-4FD5-A945-AC342BFD715B"
+                           :postalcode    "76541"
+                           :addressline1  "9500b E. Central Texas Expressway"
+                           :countryregion "United States"
+                           :stateprovince "Texas"
+                           :addressid     603}]
+         (melt/load-with-producer db sources producer-props)
+         (fact "can read message"
+               (let [topic-content (melt/read-topics consumer-props ["melt.altkey.SalesLT.Address"])]
+                 (get-in topic-content ["melt.altkey.SalesLT.Address" sample-value])
+                 => sample-value))
+
+         (fact "can verify-sync to re-sync when changed"
+               (let [table (first (filter #(= (::melt/name %) "Address") sources))]
+                 (melt/verify-sync db consumer-props producer-props table 0 1) => true))))
 
 (defn update-table [postalcode]
   (jdbc/update! db "saleslt.address"
