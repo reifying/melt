@@ -117,6 +117,22 @@
           (find (get topic-content "melt.SalesLT.Address") {:addressid 888})
           => nil)))
 
+(fact "`verify-sync` combines functionality of verify and sync-kafka to bring a
+       topic with drift back in sync after X retries fail"
+      (jdbc/with-db-transaction [t-con db]
+        (melt/verify t-con consumer-props table 0 1) => false ;; already out of sync from last test
+        (melt/verify-sync t-con consumer-props producer-props table 0 1) = true
+        (jdbc/update! t-con "saleslt.address" {:postalcode "99995"} ["addressid = ?" 888]) => [1]
+        (melt/verify-sync t-con consumer-props producer-props table 0 1) = true))
+
+(fact "`verify-sync` sends tombstones for table deletes"
+      (jdbc/with-db-transaction [t-con db]
+        (jdbc/db-set-rollback-only! t-con)
+        (jdbc/delete! t-con "SalesLT.CustomerAddress" ["addressid = ?" 888]) => [1]
+        (jdbc/delete! t-con "saleslt.address" ["addressid = ?" 888]) => [1]
+        (melt/verify t-con consumer-props table 0 1) => false
+        (melt/verify-sync t-con consumer-props producer-props table 0 1) = true))
+
 (fact "`identity` can be used as keys for tables lacking primary keys"
       (let [topic-fn     (fn [#::melt{:keys [schema name]}]
                            (str "melt.altkey." schema "." name))

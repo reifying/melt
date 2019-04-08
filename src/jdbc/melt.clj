@@ -381,12 +381,15 @@
 (defn topics [m]
   (distinct (map first (keys m))))
 
-(defn diff [db c-spec source]
-  (let [source-map (by-topic-key db source)
-        topic-map  (topic-map c-spec (topics source-map))
-        diff       (data/diff (fuzz source-map) topic-map)]
-    {:table-only (select-keys source-map (map key (first diff)))
-     :topic-only (select-keys topic-map (map key (second diff)))}))
+(defn diff
+  ([db c-spec source]
+   (let [source-map (by-topic-key db source)
+         topic-map  (topic-map c-spec (topics source-map))]
+     (diff source-map topic-map)))
+  ([source-map topic-map]
+   (let [diff       (data/diff (fuzz source-map) topic-map)]
+     {:table-only (select-keys source-map (map key (first diff)))
+      :topic-only (select-keys topic-map (map key (second diff)))})))
 
 (defn default-send-fn [producer]
   (fn [topic k v] (.send producer (ProducerRecord. topic k v))))
@@ -427,17 +430,19 @@
   (doseq [[[topic k] _] deleted]
     (send-fn topic k nil)))
 
-(defn sync-kafka [db c-spec p-spec source]
-  (let [diff       (diff db c-spec source)
-        table-only (seq (:table-only diff))
-        deleted    (seq (deleted diff))]
-    (if (or deleted table-only)
-      (with-producer [p-spec p-spec]
-        (let [p (producer p-spec)]
-          (if table-only
-            (sync-with-sender table-only (default-send-fn p)))
-          (if deleted
-            (send-tombstones deleted (default-send-fn p))))))))
+(defn sync-kafka
+  ([db c-spec p-spec source]
+   (sync-kafka p-spec (diff db c-spec source)))
+  ([p-spec diff]
+   (let [table-only (seq (:table-only diff))
+         deleted    (seq (deleted diff))]
+     (if (or deleted table-only)
+       (with-producer [p-spec p-spec]
+         (let [p (producer p-spec)]
+           (if table-only
+             (sync-with-sender table-only (default-send-fn p)))
+           (if deleted
+             (send-tombstones deleted (default-send-fn p)))))))))
 
 (defn- consumer-topics [c] (.subscription c))
 
@@ -458,6 +463,9 @@
   (= (fuzz source-data)
      (merge-topic-key (:data topic-data))))
 
+(defn- diff-matches? [diff]
+  (every? empty? (vals diff)))
+
 (defn verify [db c-spec source retries retry-delay-sec]
   (with-consumer [c-spec c-spec]
     (let [c (consumer c-spec)]
@@ -470,3 +478,24 @@
             matches
             (do (sleep retry-delay-sec)
                 (recur topic-data (dec retries)))))))))
+
+(defn verify-sync
+  "Verify up to `retries` with delay. If verify fails, perform sync and final 
+   verify."
+  [db c-spec p-spec source retries retry-delay-sec]
+  (with-consumer [c-spec c-spec]
+    (let [c (consumer c-spec)]
+      (loop [prev-topic-data empty-data
+             retries         retries
+             post-sync-try   false]
+        (let [source-map (by-topic-key db source)
+              topic-data (->> source-map
+                              topics
+                              (refresh c prev-topic-data))
+              topic-map  (:data (merge-topic-key topic-data))
+              diff       (diff source-map topic-map)
+              matches    (diff-matches? diff)]
+          (cond (or matches post-sync-try) matches
+                (<= retries 0) (do (sync-kafka p-spec diff)
+                                   (recur topic-data 0 true))
+                :default (recur topic-data (dec retries) false)))))))
