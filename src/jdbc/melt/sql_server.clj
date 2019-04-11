@@ -128,16 +128,17 @@
    Returns new version"
   [p-spec db source ver]
   (melt/with-producer [p-spec p-spec]
-    (let [p (melt/producer p-spec)
-          s (assoc source ::melt/sql-params [(change-entity-sql source) ver])
-          v (get (last (eduction (map (partial melt/message s))
-                                 (map relocate-tracking-fields)
-                                 (map tombstone)
-                                 (melt/xform s)
-                                 (map (partial send-message p))
-                                 (melt/query-source db s)))
-                 :sys_change_version
-                 ver)]
+    (let [p   (melt/producer p-spec)
+          sql (get source ::melt/sql (change-entity-sql source))
+          s   (assoc source ::melt/sql-params [sql ver])
+          v   (get (last (eduction (map (partial melt/message s))
+                                   (map relocate-tracking-fields)
+                                   (map tombstone)
+                                   (melt/xform s)
+                                   (map (partial send-message p))
+                                   (melt/query-source db s)))
+                   :sys_change_version
+                   ver)]
       (.flush p)
       v)))
 
