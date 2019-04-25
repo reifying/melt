@@ -90,7 +90,7 @@
           (get-in diff [:topic-only ["melt.SalesLT.Address" {:addressid 888}]]) => (contains {:postalcode "98626"})))
 
   (fact "`sync-kafka` publishes differences in a table to the topic to bring them back in sync"
-        (melt/sync-kafka t-con consumer-props producer-props table)
+        (melt/sync-kafka t-con consumer-props producer-props table) => 1
         (melt/diff t-con consumer-props table)
         =>
         {:table-only {}
@@ -112,7 +112,7 @@
         (jdbc/db-set-rollback-only! t-con)
         (jdbc/delete! t-con "SalesLT.CustomerAddress" ["addressid = ?" 888]) => [1]
         (jdbc/delete! t-con "saleslt.address" ["addressid = ?" 888]) => [1]
-        (melt/sync-kafka t-con sync-consumer-props producer-props table)
+        (melt/sync-kafka t-con sync-consumer-props producer-props table) => 1
         (let [topic-content (melt/read-topics consumer-props ["melt.SalesLT.Address"])]
           (find (get topic-content "melt.SalesLT.Address") {:addressid 888})
           => nil)))
@@ -131,7 +131,9 @@
         (jdbc/delete! t-con "SalesLT.CustomerAddress" ["addressid = ?" 888]) => [1]
         (jdbc/delete! t-con "saleslt.address" ["addressid = ?" 888]) => [1]
         (melt/verify t-con consumer-props table 0 1) => false
-        (melt/verify-sync t-con consumer-props producer-props table 0 1) => true))
+        (melt/verify-sync t-con consumer-props producer-props table 0 1) => (contains {:matches    true
+                                                                                       :sync       true
+                                                                                       :sync-count 1})))
 
 (facts "values can be used as keys for tables lacking primary keys"
        (let [topic-fn     (fn [#::melt{:keys [schema name]}]
@@ -155,8 +157,11 @@
                  => sample-value))
 
          (fact "can verify-sync to re-sync when changed"
-               (let [table (first (filter #(= (::melt/name %) "Address") sources))]
-                 (melt/verify-sync db consumer-props producer-props table 0 1) => true))))
+               (jdbc/with-db-transaction [t-con db]
+                 (jdbc/update! t-con "saleslt.address" {:postalcode "99996"} ["addressid = ?" 888]) => [1]
+                 (let [table (first (filter #(= (::melt/name %) "Address") sources))]
+                   (melt/verify-sync t-con consumer-props producer-props table 0 1) => (contains {:matches true
+                                                                                                  :sync    true}))))))
 
 (defn update-table [postalcode]
   (jdbc/update! db "saleslt.address"
@@ -177,10 +182,11 @@
 (try
   (fact "`sql-server/sync-kafka` performs full sync and `send-changes` performs incremental sync"
         (update-table-with-random)
-        (let [v1 (s/sync-kafka consumer-props producer-props db table)]
+        (let [sync1 (s/sync-kafka consumer-props producer-props db table)]
           (melt/verify db consumer-props table 0 1) => true
           (update-table-with-random)
-          (let [v2 (s/send-changes producer-props db table v1)]
+          (let [sync2 (s/send-changes producer-props db table (:version sync1))]
+            (:sent-count sync2) => 1
             (melt/verify db consumer-props table 0 1) => true
             (let [inserted (:id (first (jdbc/insert! db
                                                      "saleslt.address"
@@ -190,11 +196,12 @@
                                                       :addressline2  nil
                                                       :postalcode    "98626"
                                                       :stateprovince "Washington"})))
-                  v3       (s/send-changes producer-props db table v2)]
+                  sync3    (s/send-changes producer-props db table (:version sync2))]
+              (:sent-count sync3) => 1
               (try
                 (melt/verify db consumer-props table 0 1) => true
                 (jdbc/delete! db "saleslt.address" ["addressid = ?" inserted])
-                (s/send-changes producer-props db table v3)
+                (:sent-count (s/send-changes producer-props db table (:version sync3))) => 1
                 (melt/verify db consumer-props table 0 1) => true
                 (finally (jdbc/delete! db "saleslt.address" ["addressid = ?" inserted])))))))
 

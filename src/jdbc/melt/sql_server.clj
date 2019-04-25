@@ -111,8 +111,8 @@
 (defn- send-message [producer message]
   (let [#::melt{:keys [topic key value]}
         (spec/assert ::melt/message message)]
-    (.send producer (ProducerRecord. topic key value))
-    message))
+    {:future  (.send producer (ProducerRecord. topic key value))
+     :message message}))
 
 (defn- relocate-tracking-fields [message]
   (merge (apply update message ::melt/value dissoc tracking-fields)
@@ -123,24 +123,34 @@
     (assoc message ::melt/value nil)
     message))
 
+(defn last+count [coll]
+  (loop [i (if (seq coll) 1 0)
+         s coll]
+    (if (next s)
+      (recur (inc i) (next s))
+      {:last  (first s)
+       :count i})))
+
 (defn send-changes
   "Query change tracking, starting at change version `ver`, and send to Kafka.
    Returns new version"
-  [p-spec db source ver]
-  (melt/with-producer [p-spec p-spec]
-    (let [p   (melt/producer p-spec)
-          sql (get source ::melt/sql (change-entity-sql source))
-          s   (assoc source ::melt/sql-params [sql ver])
-          v   (get (last (eduction (map (partial melt/message s))
-                                   (map relocate-tracking-fields)
-                                   (map tombstone)
-                                   (melt/xform s)
-                                   (map (partial send-message p))
-                                   (melt/query-source db s)))
-                   :sys_change_version
-                   ver)]
-      (.flush p)
-      v)))
+  ([p-spec db source ver]
+   (melt/with-producer [p-spec p-spec]
+     (let [p   (melt/producer p-spec)
+           sql (get source ::melt/sql (change-entity-sql source))
+           src (assoc source ::melt/sql-params [sql ver])
+           m   (last+count (send-changes p db src))]
+       {:version    (get-in m [:last :sys_change_version] ver)
+        :sent-count (:count m)})))
+  ([producer db source]
+   (melt/flush-messages
+    (melt/backpressure-channel
+     (eduction (map (partial melt/message source))
+               (map relocate-tracking-fields)
+               (map tombstone)
+               (melt/xform source)
+               (map (partial send-message producer))
+               (melt/query-source db source))))))
 
 (defn sync-kafka
   "Perform full sync and return latest change version"

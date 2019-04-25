@@ -19,13 +19,15 @@
 
 (defn count-send-fn [counts-atom]
   (fn [topic k v]
-    (swap! counts-atom (fn [tc] (update tc topic #(inc (or % 0)))))))
+    (swap! counts-atom (fn [tc] (update tc topic #(inc (or % 0)))))
+    {:future  (future nil)}))
 
 (defn assoc-send-fn [records-atom]
   (fn [_ k v] (swap! records-atom
                      (fn [m] (assoc m
                                     (melt/lossy-identity k)
-                                    (melt/lossy-identity v))))))
+                                    (melt/lossy-identity v))))
+    {:future  (future nil)}))
 
 (defn topic [source]
   (str "melt." (::melt/schema source) "." (::melt/name source)))

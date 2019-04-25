@@ -2,6 +2,7 @@
   (:require [clojure.data :as data]
             [cheshire.core :as json]
             [cheshire.generate :as gen]
+            [clojure.core.async :as async]
             [clojure.java.io :as io]
             [clojure.java.jdbc :as jdbc]
             [clojure.pprint :refer [pprint]]
@@ -28,6 +29,22 @@
 
 (defn xform [source]
   (get source ::xform (map identity)))
+
+(defn throw-err [e]
+  (when (instance? Throwable e) (throw e))
+  e)
+
+(defmacro <?? [ch]
+  `(throw-err (async/<!! ~ch)))
+
+(defn backpressure-channel [coll]
+  (let [c (async/chan 1000)]
+    (async/go
+      (try
+        (doseq [x coll] (async/>! c x))
+        (catch Throwable e (async/>! c e))
+        (finally (async/close! c))))
+    c))
 
 (defn message [source row]
   (if-let [keys (get source ::keys)]
@@ -393,20 +410,40 @@
       :topic-only (select-keys topic-map (map key (second diff)))})))
 
 (defn default-send-fn [producer]
-  (fn [topic k v] (.send producer (ProducerRecord. topic k v))))
+  (fn [topic k v]
+    (let [record (ProducerRecord. topic k v)]
+      {:message record
+       :future  (.send producer record)})))
+
+(defn flush-message [m]
+  (.get (:future m))
+  (:message m))
+
+(defn flush-messages [channel]
+  (map flush-message
+       (take-while some? (repeatedly #(<?? channel)))))
 
 (defn- source-desc [source]
   (or (::name source) (::sql source)))
 
-(defn- do-load [db sources send-fn]
+(defn- log-load-start [source]
+  (println "Starting to load" (source-desc source))
+  source)
+
+(defn- log-load-finish [source total]
+  (println "Completed loading" (source-desc source) "with count" total)
+  total)
+
+(defn- do-load [db sources send-fn] ; TODO return total
   (doseq [source sources]
-    (let [desc (source-desc source)]
-      (println "Starting to load" desc)
-      (doall (eduction (map (partial message source))
-                       (xform source)
-                       (map send-fn)
-                       (query-source db source)))
-      (println "Completed loading" desc))))
+    (->> source
+         log-load-start
+         (query-source db)
+         (eduction (map (partial message source)) (xform source) (map send-fn))
+         backpressure-channel
+         flush-messages
+         count
+         (log-load-finish source))))
 
 (defn load-with-sender [db sources send-fn]
   (do-load db sources #(apply send-fn ((juxt ::topic ::key ::value)
@@ -414,13 +451,16 @@
 
 (defn load-with-producer [db sources p-spec]
   (with-producer [p-spec p-spec]
-    (let [p (producer p-spec)]
-      (load-with-sender db sources (default-send-fn p))
-      (.flush p))))
+    (->> p-spec
+         producer
+         default-send-fn
+         (load-with-sender db sources))))
 
 (defn sync-with-sender [db-only send-fn]
-  (doseq [[[topic k] v] db-only]
-    (send-fn topic k v)))
+  (-> (for [[[topic k] v] db-only] (send-fn topic k v))
+      backpressure-channel
+      flush-messages
+      count))
 
 (defn deleted [diff]
   (apply dissoc
@@ -428,8 +468,10 @@
          (keys (:table-only diff))))
 
 (defn send-tombstones [deleted send-fn]
-  (doseq [[[topic k] _] deleted]
-    (send-fn topic k nil)))
+  (-> (for [[[topic k] _] deleted] (send-fn topic k nil))
+      backpressure-channel
+      flush-messages
+      count))
 
 (defn sync-kafka
   ([db c-spec p-spec source]
@@ -440,10 +482,12 @@
      (if (or deleted table-only)
        (with-producer [p-spec p-spec]
          (let [p (producer p-spec)]
-           (if table-only
-             (sync-with-sender table-only (default-send-fn p)))
-           (if deleted
-             (send-tombstones deleted (default-send-fn p)))))))))
+           (apply
+            + (filter some?
+                      [(if table-only
+                         (sync-with-sender table-only (default-send-fn p)))
+                       (if deleted
+                         (send-tombstones deleted (default-send-fn p)))]))))))))
 
 (defn- consumer-topics [c] (.subscription c))
 
@@ -487,16 +531,20 @@
   (with-consumer [c-spec c-spec]
     (let [c (consumer c-spec)]
       (loop [prev-topic-data empty-data
+             attempt         1
              retries         retries
-             post-sync-try   false]
+             post-sync-try   false
+             sync-count      0]
         (let [source-map (by-topic-key db source)
               topic-data (->> source-map
                               topics
                               (refresh c prev-topic-data))
-              topic-map (merge-topic-key (:data topic-data))
+              topic-map  (merge-topic-key (:data topic-data))
               diff       (diff source-map topic-map)
               matches    (diff-matches? diff)]
-          (cond (or matches post-sync-try) matches
-                (<= retries 0) (do (sync-kafka p-spec diff)
-                                   (recur topic-data 0 true))
-                :default (recur topic-data (dec retries) false)))))))
+          (cond (or matches post-sync-try) {:matches    matches
+                                            :attempts   attempt
+                                            :sync       post-sync-try
+                                            :sync-count sync-count}
+                (<= retries 0) (recur topic-data attempt 0 true (sync-kafka p-spec diff))
+                :default (recur topic-data (inc attempt) (dec retries) false sync-count)))))))
