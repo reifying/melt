@@ -137,7 +137,7 @@
   ([p-spec db source ver]
    (melt/with-producer [p-spec p-spec]
      (let [p   (melt/producer p-spec)
-           sql (get source ::melt/sql (change-entity-sql source))
+           sql (get source ::melt/change-tracking-sql (change-entity-sql source))
            src (assoc source ::melt/sql-params [sql ver])
            m   (last+count (send-changes p db src))]
        {:version    (get-in m [:last :sys_change_version] ver)
