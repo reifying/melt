@@ -45,6 +45,10 @@
   (doto consumer-props
     (.put "group.id" "melt.integration-test.sync")))
 
+(try
+  (jdbc/execute! db ["Create table t_empty (id integer)"])
+  (catch Exception e)) ; ignore
+
 (def schema (melt/schema db))
 
 (defn topic [source]
@@ -57,6 +61,11 @@
   (map #(assoc % ::melt/xform (assoc-topic-xform %)) schema))
 
 (def table (first (filter #(= (::melt/name %) "Address") schema-sources)))
+
+(def empty-table (first (filter #(= (::melt/name %) "t_empty") schema-sources)))
+
+(fact "an empty topic results in an empty seq"
+  (melt/count-topic consumer-props "melty.empty") => 0)
 
 (fact "a table written to a topic may be read from a topic"
       (melt/load-with-producer db schema-sources producer-props)
@@ -79,8 +88,12 @@
       {:table-only {}
        :topic-only {}})
 
+(fact "`diff` handles empty table correctly"
+      (melt/diff db consumer-props empty-table) => {:topic-only {}
+                                                    :table-only {}})
+
 (jdbc/with-db-transaction [t-con db]
-  (jdbc/db-set-rollback-only! t-con)
+  (jdbc/db-set-rollback-only! t-con) 
 
   (fact "`diff` finds differences when the table has changed"
         (jdbc/update! t-con "saleslt.address" {:postalcode "99995"} ["addressid = ?" 888]) => [1]

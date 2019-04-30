@@ -33,7 +33,8 @@ for TOPIC in \
     "melt.altkey.SalesLT.SalesOrderDetail" \
     "melt.altkey.SalesLT.Address" \
     "melt.altkey.SalesLT.ProductCategory" \
-    "melt.altkey.dbo.ErrorLog"
+    "melt.altkey.dbo.ErrorLog" \
+    "melt.empty"
   do
     docker exec -it kafka-broker /bin/sh -c "/opt/kafka/bin/kafka-topics.sh --zookeeper \$KAFKA_ZOOKEEPER_CONNECT --create --partitions 1 --replication-factor 1 --topic $TOPIC"
 done
