@@ -290,7 +290,7 @@
    (consumer-seq c current-offsets (fully-consumed-fn c) []))
   ([^Consumer c current-offsets stop-consuming-fn messages]
    (lazy-seq
-    (if (seq messages)
+    (if (seq messages)  
       (let [record      (first messages)
             cur-offsets (assoc-offset current-offsets record)]
         (cons (seq-entry record cur-offsets)
@@ -336,14 +336,12 @@
   (with-consumer [c-spec c-spec]
     (let [c (consumer c-spec)]
       (reset-consumer c topics)
-      (if (seq topics)
-        (loop [topic-data empty-data
-               retries    retries]
-          (if (<= retries 0)
-            topic-data
-            (recur (reduce-consumer-seq c topic-data)
-                   (dec retries))))
-        empty-data))))
+      (loop [topic-data empty-data
+             retries    retries]
+        (if (or (<= retries 0) (empty? topics))
+          topic-data
+          (recur (reduce-consumer-seq c topic-data)
+                 (dec retries)))))))
 
 (defn read-topics
   "Read topics twice since reading a large topic could take minutes by which
@@ -499,9 +497,11 @@
     (= consumer-topics new-topics)))
 
 (defn- refresh [consumer topic-data topics]
-  (if (topics-match consumer topics)
-    (reduce-consumer-seq consumer topic-data)
-    (reduce-consumer-seq (reset-consumer consumer topics) empty-data)))
+  (if (seq topics)
+    (if (topics-match consumer topics)
+      (reduce-consumer-seq consumer topic-data)
+      (reduce-consumer-seq (reset-consumer consumer topics) empty-data))
+    topic-data))
 
 (defn- sleep [secs]
   (Thread/sleep (* 1000 secs)))

@@ -65,7 +65,7 @@
 (def empty-table (first (filter #(= (::melt/name %) "t_empty") schema-sources)))
 
 (fact "an empty topic results in an empty seq"
-  (melt/count-topic consumer-props "melty.empty") => 0)
+      (melt/count-topic consumer-props "melty.empty") => 0)
 
 (fact "a table written to a topic may be read from a topic"
       (melt/load-with-producer db schema-sources producer-props)
