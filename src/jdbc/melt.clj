@@ -304,13 +304,20 @@
       (reset-consumer c [topic])
       (count (consumer-seq c {})))))
 
+(defn- add-or-replace-entry [data topic k v]
+  (assoc-in data [:data topic k] v))
+
+(defn- remove-entry [data topic k]
+  (update-in data [:data topic] dissoc k))
+
+; TODO use names that don't mask core functions (e.g., key)
 (defn- merge-seq-entry [topic-data seq-entry]
   (let [{:keys [topic key value]} (:consumer-record seq-entry)
         data                      (update topic-data :offsets
                                           merge (:offsets seq-entry))]
     (if (some? value)
-      (assoc-in data [:data topic key] value)
-      (update-in data [:data topic] dissoc key))))
+      (add-or-replace-entry data topic key value)
+      (remove-entry data topic key))))
 
 (defn reduce-consumer-seq [c topic-data]
   (reduce merge-seq-entry topic-data (consumer-seq c (:offsets topic-data))))
@@ -372,9 +379,15 @@
 
 (def lossy-identity (comp read-str write-str))
 
-(defn fuzz [table-map]
-  (reduce-kv (fn [m k v] (assoc m (lossy-identity k) (lossy-identity v)))
-             {} table-map))
+(defn fuzz
+  "Given a map, return a tuple where the first value is the fuzzed map and the
+   second is a map that correlates fuzzed keys to the original key"
+  [table-map]
+  (let [key->lossy-key (reduce #(assoc %1 %2 (lossy-identity %2)) {} (keys table-map))
+        lossy-key->key (clojure.set/map-invert key->lossy-key)]
+    [(reduce-kv (fn [m k v] (assoc m (key->lossy-key k) (lossy-identity v)))
+                {} table-map)
+     lossy-key->key]))
 
 (defn merge-by-key [acc message]
   (let [m (spec/assert ::message message)]
@@ -399,15 +412,21 @@
 (defn topics [m]
   (distinct (map first (keys m))))
 
+(defn unfuzz-keys [m lossy-key->key]
+  (reduce-kv #(assoc %1 (lossy-key->key %2) %3) {} m))
+
 (defn diff
   ([db c-spec source]
    (let [source-map (by-topic-key db source)
          topic-map  (topic-map c-spec (topics source-map))]
      (diff source-map topic-map)))
   ([source-map topic-map]
-   (let [diff       (data/diff (fuzz source-map) topic-map)]
-     {:table-only (select-keys source-map (map key (first diff)))
-      :topic-only (select-keys topic-map (map key (second diff)))})))
+   (let [[fuzz lossy-key->key] (fuzz source-map)
+         diff                  (data/diff fuzz topic-map)
+         table-only            (select-keys fuzz (map key (first diff)))
+         topic-only            (select-keys topic-map (map key (second diff)))]
+     {:table-only (unfuzz-keys table-only lossy-key->key)
+      :topic-only topic-only})))
 
 (defn default-send-fn [producer]
   (fn [topic k v]
@@ -507,7 +526,7 @@
   (Thread/sleep (* 1000 secs)))
 
 (defn- matches [source-data topic-data]
-  (= (fuzz source-data)
+  (= (first (fuzz source-data))
      (merge-topic-key (:data topic-data))))
 
 (defn- diff-matches? [diff]

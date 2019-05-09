@@ -7,18 +7,12 @@
 ;; Tests are dependent on each other. order matters and predecessor tests failing
 ;; will likely cause successors to fail.
 
-(def host   (System/getenv "MELT_DB_HOST"))
-(def port   (or (System/getenv "MELT_DB_PORT") "1433"))
-(def user   (System/getenv "MELT_DB_USER"))
-(def pass   (System/getenv "MELT_DB_PASS"))
-(def dbname (System/getenv "MELT_DB_NAME"))
-
 (def db {:dbtype   "jtds"
-         :dbname   dbname
-         :host     host
-         :port     port
-         :user     user
-         :password pass})
+         :dbname   (System/getenv "MELT_DB_NAME")
+         :host     (System/getenv "MELT_DB_HOST")
+         :port     (or (System/getenv "MELT_DB_PORT") "1433")
+         :user     (System/getenv "MELT_DB_USER")
+         :password (System/getenv "MELT_DB_PASS")})
 
 (def bootstrap-servers
   (str (or (System/getenv "MELT_KAFKA_HOST") "localhost") ":9092"))
@@ -40,10 +34,6 @@
     (.put "key.deserializer" deserializer)
     (.put "value.deserializer" deserializer)
     (.put "group.id" "melt.integration-test")))
-
-(def sync-consumer-props
-  (doto consumer-props
-    (.put "group.id" "melt.integration-test.sync")))
 
 (try
   (jdbc/execute! db ["Create table t_empty (id integer)"])
@@ -93,7 +83,7 @@
                                                     :table-only {}})
 
 (jdbc/with-db-transaction [t-con db]
-  (jdbc/db-set-rollback-only! t-con) 
+  (jdbc/db-set-rollback-only! t-con)
 
   (fact "`diff` finds differences when the table has changed"
         (jdbc/update! t-con "saleslt.address" {:postalcode "99995"} ["addressid = ?" 888]) => [1]
@@ -116,27 +106,44 @@
         (melt/verify t-con consumer-props table 0 1) => false)
 
   (fact "`verify` can retry to reduce false-positives for active sources"
-        (future (Thread/sleep 5000)
-                (melt/sync-kafka t-con sync-consumer-props producer-props table))
-        (melt/verify t-con consumer-props table 20 1) => true))
+        (let [f (future (Thread/sleep 5000)
+                        (melt/sync-kafka t-con consumer-props producer-props table))]
+          (time (melt/verify t-con consumer-props table 20 1)) => true
+          (deref f))))
 
 (fact "Deleted table entries will result in tombstone on topic"
       (jdbc/with-db-transaction [t-con db]
         (jdbc/db-set-rollback-only! t-con)
         (jdbc/delete! t-con "SalesLT.CustomerAddress" ["addressid = ?" 888]) => [1]
         (jdbc/delete! t-con "saleslt.address" ["addressid = ?" 888]) => [1]
-        (melt/sync-kafka t-con sync-consumer-props producer-props table) => 1
+        (melt/sync-kafka t-con consumer-props producer-props table) => 1
         (let [topic-content (melt/read-topics consumer-props ["melt.SalesLT.Address"])]
           (find (get topic-content "melt.SalesLT.Address") {:addressid 888})
           => nil)))
 
+(fact "`verify-sync` supports dates in keys"
+      (let [table (assoc table ::melt/keys [:addressid :modifieddate])]
+        (melt/verify db consumer-props table 0 1) => false ;; already out of sync from last test
+        (melt/verify-sync db consumer-props producer-props table 0 1) => (contains {:attempts 1
+                                                                                    :matches  true
+                                                                                    :sync     true})
+        (melt/verify db consumer-props table 0 1) => true))
+
 (fact "`verify-sync` combines functionality of verify and sync-kafka to bring a
        topic with drift back in sync after X retries fail"
       (jdbc/with-db-transaction [t-con db]
+
         (melt/verify t-con consumer-props table 0 1) => false ;; already out of sync from last test
-        (melt/verify-sync t-con consumer-props producer-props table 0 1) = true
+        (melt/verify-sync t-con consumer-props producer-props table 0 1) => (contains {:attempts 1
+                                                                                       :matches  true
+                                                                                       :sync     true})
+        (melt/verify t-con consumer-props table 0 1) => true
         (jdbc/update! t-con "saleslt.address" {:postalcode "99995"} ["addressid = ?" 888]) => [1]
-        (melt/verify-sync t-con consumer-props producer-props table 0 1) = true))
+        (melt/verify-sync t-con consumer-props producer-props table 0 1) => {:attempts   1
+                                                                             :matches    true
+                                                                             :sync       true
+                                                                             :sync-count 1}
+        (melt/verify t-con consumer-props table 0 1) => true))
 
 (fact "`verify-sync` sends tombstones for table deletes"
       (jdbc/with-db-transaction [t-con db]
