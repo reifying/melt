@@ -51,7 +51,7 @@
     (difference (set trackable) (set tracked))))
 
 (defn track-all [db schema]
-  (doall (map track-table (trackable-untracked db schema))))
+  (doall (map (partial track-table db) (trackable-untracked db schema))))
 
 (defn print-track-all [db schema]
   (doall (map #(do (println (track-table-sql %)) (println "GO"))
