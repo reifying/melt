@@ -133,7 +133,7 @@
       diff)))
 
 (defn qualified-table-name [#:jdbc.melt{:keys [schema name]}]
-  (str "[" schema "].[" name "]"))
+  (str schema "." name))
 
 (defn select-all-sql [table]
   (str "Select * From " (qualified-table-name table)))
