@@ -42,7 +42,7 @@ jobs:
           key: v1-dependencies-{{ checksum "deps.edn" }}
 
       - setup_remote_docker:
-        version: 19.03.13
+          version: 19.03.13
         
       - run: build/run_sql_server.sh
       - run: build/run_kafka.sh
