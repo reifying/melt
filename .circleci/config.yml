@@ -5,8 +5,7 @@
 version: 2.1
 jobs:
   build:
-    machine:
-      image: circleci/clojure:tools-deps
+    machine: true
 
     working_directory: ~/repo
 
