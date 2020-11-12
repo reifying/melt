@@ -18,7 +18,7 @@ jobs:
 
     environment:
       MELT_KAFKA_HOST: "127.0.0.1"
-      MELT_DB_HOST: "localhost"
+      MELT_DB_HOST: "127.0.0.1"
       MELT_DB_USER: "sa"
       MELT_DB_PASS: "password-1234"
       MELT_DB_NAME: "AdventureWorks"
