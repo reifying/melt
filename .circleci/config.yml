@@ -5,6 +5,7 @@
 version: 2
 jobs:
   build:
+    machine: true
     docker:
       # specify the version you desire here
       - image: circleci/clojure:tools-deps
@@ -41,9 +42,9 @@ jobs:
             - .cpcache
           key: v1-dependencies-{{ checksum "deps.edn" }}
 
-      - setup_remote_docker:
-          version: 19.03.13
-          docker_layer_caching: true
+      # - setup_remote_docker:
+      #     version: 19.03.13
+      #     docker_layer_caching: true
         
       - run: build/run_sql_server.sh
       - run: netstat -tnlp
