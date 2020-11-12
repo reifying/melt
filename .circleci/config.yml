@@ -5,9 +5,7 @@
 version: 2
 jobs:
   build:
-    machine: true
-    docker:
-      # specify the version you desire here
+    machine:
       - image: circleci/clojure:tools-deps
 
       # Specify service dependencies here if necessary
