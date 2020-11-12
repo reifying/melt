@@ -1,7 +1,3 @@
-# Clojure CircleCI 2.0 configuration file
-#
-# Check https://circleci.com/docs/2.0/language-clojure/ for more details
-#
 version: 2.1
 jobs:
   build:
@@ -28,10 +24,6 @@ jobs:
             - v1-dependencies-
 
       - run: build/install_clojure.sh
-      - run: which clojure || echo 0
-      - run: which clj || echo 0
-      - run: echo $PATH
-      - run: apt list --installed | grep cl
       - run: build/compile.sh
 
       - save_cache:
@@ -39,17 +31,7 @@ jobs:
             - .cpcache
           key: v1-dependencies-{{ checksum "deps.edn" }}
 
-      # - setup_remote_docker:
-      #     version: 19.03.13
-      #     docker_layer_caching: true
-        
       - run: build/run_sql_server.sh
-      - run: netstat -tnlp
       - run: build/run_kafka.sh
-      - run: netstat -tnlp
       - run: build/init_kafka.sh
-      - run: netstat -tnlp
-      - run: docker ps -a
-
-      # run tests!
       - run: build/run_tests.sh
