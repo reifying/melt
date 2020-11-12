@@ -27,6 +27,7 @@ jobs:
             # fallback to using the latest cache if no exact match is found
             - v1-dependencies-
 
+      - run: build/install_clojure.sh
       - run: which clojure || echo 0
       - run: which clj || echo 0
       - run: echo $PATH
