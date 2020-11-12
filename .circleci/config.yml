@@ -7,7 +7,7 @@ jobs:
   build:
     docker:
       # specify the version you desire here
-      - image: circleci/clojure:lein-2.7.1
+      - image: circleci/clojure:tools-deps
 
       # Specify service dependencies here if necessary
       # CircleCI maintains a library of pre-built images
@@ -17,9 +17,12 @@ jobs:
     working_directory: ~/repo
 
     environment:
-      LEIN_ROOT: "true"
-      # Customize the JVM maximum heap limit
-      JVM_OPTS: -Xmx3200m
+      MELT_KAFKA_HOST: "127.0.0.1"
+      MELT_DB_HOST: "localhost"
+      MELT_DB_USER: "sa"
+      MELT_DB_PASS: "password-1234"
+      MELT_DB_NAME: "AdventureWorks"
+      DOCKER_COMPOSE_VERSION: "1.4.2"
 
     steps:
       - checkout
@@ -31,12 +34,12 @@ jobs:
             # fallback to using the latest cache if no exact match is found
             - v1-dependencies-
 
-      - run: lein deps
+      - run: build/compile.sh
 
       - save_cache:
           paths:
-            - ~/.m2
-          key: v1-dependencies-{{ checksum "project.clj" }}
+            - .cpcache
+          key: v1-dependencies-{{ checksum "deps.edn" }}
 
       # run tests!
-      - run: lein test
+      - run: build/run_tests.sh
