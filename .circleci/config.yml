@@ -45,8 +45,11 @@ jobs:
           version: 19.03.13
         
       - run: build/run_sql_server.sh
+      - run: netstat -tnlp
       - run: build/run_kafka.sh
+      - run: netstat -tnlp
       - run: build/init_kafka.sh
+      - run: netstat -tnlp
       - run: docker ps -a
 
       # run tests!
